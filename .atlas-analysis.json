@@ -1,0 +1,130 @@
+{
+  "projectType": "saas",
+  "projectName": "GOV.UK Notify Admin",
+  "projectDescription": "Admin frontend application for managing GOV.UK Notify services, users, and notifications",
+  "theme": "linden",
+  "primaryColor": "#1d70b8",
+  "lightColor": "#5694ca",
+  "darkColor": "#144e81",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "getting-started",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/services",
+              "features/users-and-permissions",
+              "features/templates",
+              "features/sending-notifications",
+              "features/dashboard-and-reporting",
+              "features/api-keys"
+            ]
+          },
+          {
+            "group": "User Guides",
+            "pages": [
+              "guides/managing-services",
+              "guides/uploading-recipients",
+              "guides/template-management",
+              "guides/branding",
+              "guides/authentication"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment-variables",
+              "configuration/aws-setup",
+              "configuration/session-management"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "development/setup",
+              "development/running-locally",
+              "development/testing"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "development/application-structure",
+              "development/flask-blueprints",
+              "development/models",
+              "development/api-clients"
+            ]
+          },
+          {
+            "group": "Frontend",
+            "pages": [
+              "development/static-assets",
+              "development/templates-and-jinja",
+              "development/javascript",
+              "development/styling"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/notify-clients",
+              "reference/utilities",
+              "reference/formatters",
+              "reference/validators"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/guidelines",
+              "contributing/code-style",
+              "contributing/testing-strategy"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "User and service management with role-based permissions",
+    "Template creation and management for email, SMS, and letters",
+    "Batch notification sending via CSV upload",
+    "Real-time dashboard with notification history and statistics",
+    "Multi-factor authentication including WebAuthn support",
+    "Organization management with team hierarchies",
+    "API key generation and management",
+    "Branding customization for emails and letters"
+  ],
+  "publicApiSurface": [
+    "Service API Client - service_api_client",
+    "User API Client - user_api_client",
+    "Notification API Client - notification_api_client",
+    "Template Folder API Client - template_folder_api_client",
+    "Job API Client - job_api_client",
+    "Organisation API Client - organisations_client",
+    "Invite API Client - invite_api_client",
+    "Billing API Client - billing_api_client",
+    "Email Branding Client - email_branding_client",
+    "Letter Branding Client - letter_branding_client",
+    "Contact List API Client - contact_list_api_client",
+    "API Key API Client - api_key_api_client",
+    "Events API Client - events_api_client",
+    "Report Request API Client - report_request_api_client",
+    "Unsubscribe API Client - unsubscribe_api_client"
+  ]
+}
