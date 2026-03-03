@@ -232,7 +232,7 @@ Multiple layers protect user data and prevent attacks:
 - Session-tied tokens prevent reuse across sessions
 
 **Content Security Policy**
-```python
+```http
 Content-Security-Policy:
   default-src 'self' {asset_domain} 'unsafe-inline';
   script-src 'self' {asset_domain} 'nonce-{csp_nonce}';
@@ -436,7 +436,7 @@ npx jest  # JavaScript tests
 
 ### Project structure
 
-```
+```text
 app/
 ├── __init__.py          # Application factory
 ├── config.py            # Environment configurations
