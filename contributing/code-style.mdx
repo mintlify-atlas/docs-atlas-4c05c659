@@ -1,0 +1,545 @@
+---
+title: Code Style Standards
+description: Coding standards and style guidelines for GOV.UK Notify Admin
+---
+
+## Overview
+
+GOV.UK Notify Admin maintains strict code quality standards through automated linting and formatting tools. This ensures consistency across the codebase and reduces review overhead.
+
+## Python Style Guide
+
+### Linting with Ruff
+
+We use [Ruff](https://github.com/astral-sh/ruff) for Python linting and formatting. Ruff is configured in `ruff.toml`:
+
+```toml
+line-length = 120
+target-version = "py313"
+
+extend-exclude = [
+    "migrations/versions/",
+    "__pycache__",
+    "cache",
+    "migrations",
+    "build",
+]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort (import sorting)
+    "B",    # flake8-bugbear
+    "C90",  # mccabe cyclomatic complexity
+    "G",    # flake8-logging-format
+    "T20",  # flake8-print (no print statements)
+    "UP",   # pyupgrade
+    "C4",   # flake8-comprehensions
+    "ISC",  # flake8-implicit-str-concat
+    "RSE",  # flake8-raise
+    "PIE",  # flake8-pie
+    "N804", # First argument of class method should be named `cls`
+    "RUF100", # Checks for obsolete noqa directives
+]
+```
+
+### Running Ruff
+
+```bash
+# Check for style violations
+ruff check .
+
+# Check formatting
+ruff format --check .
+
+# Auto-fix violations
+ruff check --fix .
+
+# Format code
+ruff format .
+
+# Run full lint (both check and format)
+make lint
+```
+
+### Python Code Conventions
+
+#### Line Length
+
+**Maximum 120 characters per line**
+
+```python
+# Good
+def send_notification(
+    user_id,
+    template_id,
+    personalisation=None,
+    reference=None,
+):
+    pass
+
+# Bad - line too long
+def send_notification(user_id, template_id, personalisation=None, reference=None, scheduled_for=None, reply_to_id=None):
+    pass
+```
+
+#### Import Sorting
+
+Imports are automatically sorted by Ruff (isort rules):
+
+```python
+# Standard library imports
+import os
+from datetime import UTC, datetime
+from functools import wraps
+from typing import Any
+
+# Third-party imports
+from flask import abort, current_app, request, session
+from flask_login import current_user, login_required
+from notifications_python_client.errors import HTTPError
+from werkzeug.utils import cached_property
+
+# Local application imports
+from app.constants import PERMISSION_CAN_MAKE_SERVICES_LIVE
+from app.event_handlers import Events
+from app.models import JSONModel, ModelList
+from app.notify_client.user_api_client import user_api_client
+```
+
+Fix import order automatically:
+
+```bash
+make fix-imports
+```
+
+#### Class Method First Argument
+
+Class methods must use `cls` as the first parameter:
+
+```python
+# Good
+class User:
+    @classmethod
+    def from_id(cls, user_id):
+        return cls(user_api_client.get_user(user_id))
+
+# Bad - triggers N804 error
+class User:
+    @classmethod
+    def from_id(self, user_id):  # Should be 'cls' not 'self'
+        return self(user_api_client.get_user(user_id))
+```
+
+#### No Print Statements
+
+Use proper logging instead of print:
+
+```python
+# Good
+import logging
+logger = logging.getLogger(__name__)
+
+logger.info(f"User {user_id} logged in")
+logger.error(f"Failed to send notification: {error}")
+
+# Bad - triggers T20 error
+print(f"User {user_id} logged in")
+```
+
+#### List/Dict Comprehensions
+
+Use comprehensions appropriately:
+
+```python
+# Good - simple transformation
+user_ids = [user.id for user in users]
+
+# Good - with filter
+active_users = [user for user in users if user.is_active]
+
+# Bad - unnecessary comprehension
+list([user.id for user in users])  # Just use [user.id for user in users]
+
+# Bad - too complex for comprehension
+result = [
+    process_user(user, context, settings, options)
+    for user in users
+    if user.is_active and user.has_permission('send')
+    and not user.is_blocked
+]
+# Better as a regular loop
+result = []
+for user in users:
+    if user.is_active and user.has_permission('send') and not user.is_blocked:
+        result.append(process_user(user, context, settings, options))
+```
+
+#### Type Hints
+
+Use type hints for function parameters and returns:
+
+```python
+from typing import Any
+
+# Good
+def set_organisation_permissions(
+    self,
+    organisation_id: str,
+    permissions: list[str],
+    set_by_id: str,
+) -> None:
+    user_api_client.set_organisation_permissions(
+        self.id,
+        organisation_id=organisation_id,
+        permissions=[{"permission": p} for p in permissions],
+    )
+
+# Class attributes
+class BaseUser(JSONModel):
+    id: Any
+    email_address: str
+    created_at: datetime
+    permissions: Any
+```
+
+#### String Formatting
+
+Use f-strings for string interpolation:
+
+```python
+# Good
+message = f"User {user.name} sent {count} notifications"
+
+# Bad - old-style formatting
+message = "User %s sent %d notifications" % (user.name, count)
+message = "User {} sent {} notifications".format(user.name, count)
+```
+
+## JavaScript Style Guide
+
+### ESLint Configuration
+
+JavaScript is linted with ESLint using configuration from `eslint.config.mjs`:
+
+```javascript
+export default [
+  {
+    files: ["app/assets/**/*.{js,mjs}", "tests/**/*.{js,mjs}"],
+    rules: {
+      ...js.configs.recommended.rules,
+      "semi": ["error", "always"],
+      "no-prototype-builtins": "warn",
+      "no-unused-vars": "warn",
+      "no-extra-boolean-cast": "warn",
+      "no-undef": "warn",
+    },
+  },
+];
+```
+
+### Running ESLint
+
+```bash
+# Lint JavaScript files
+npm run lint:js
+
+# Run all linting (includes SCSS)
+npm test
+```
+
+### JavaScript Conventions
+
+#### Semicolons Required
+
+Always use semicolons:
+
+```javascript
+// Good
+const user = getUser();
+user.login();
+
+// Bad - missing semicolons
+const user = getUser()
+user.login()
+```
+
+#### Module Format
+
+Use CommonJS for browser code, ES modules for tests:
+
+```javascript
+// app/assets/**/*.js - CommonJS
+const GOVUK = require('govuk-frontend');
+
+module.exports = {
+  init: function() {
+    // initialization code
+  }
+};
+
+// tests/**/*.mjs - ES modules
+import Autofocus from '../../app/assets/javascripts/esm/autofocus.mjs';
+import { jest } from '@jest/globals';
+
+export default Autofocus;
+```
+
+#### Global Variables
+
+Declare globals in ESLint config:
+
+```javascript
+// For browser code
+globals: {
+  '$': 'writable',
+  "GOVUK": "readonly"
+}
+```
+
+#### jQuery Usage
+
+```javascript
+// Good - using jQuery properly
+if (document.body.classList.contains('govuk-frontend-supported')) {
+  $(() => $("time.timeago").timeago());
+  $(() => GOVUK.notifyModules.start());
+}
+
+// Event handlers
+$('.govuk-header__container').on('click', function() {
+  $(this).css('border-color', '#1d70b8');
+});
+```
+
+## SCSS/CSS Style Guide
+
+### Stylelint Configuration
+
+SCSS is linted with Stylelint using `stylelint.config.mjs`:
+
+```javascript
+export default {
+  extends: [
+    "stylelint-config-standard-scss",
+    "stylelint-config-gds/scss"
+  ],
+  ignoreFiles: ["venv/**"],
+};
+```
+
+### Running Stylelint
+
+```bash
+# Lint SCSS files
+npm run lint:scss
+```
+
+### SCSS Conventions
+
+- Follow GOV.UK Design System patterns
+- Use standard SCSS syntax
+- Avoid overly nested selectors
+- Use variables for colors and spacing
+
+```scss
+// Good
+.notification-banner {
+  background-color: $govuk-brand-colour;
+  padding: govuk-spacing(3);
+  
+  &__heading {
+    font-weight: bold;
+  }
+}
+
+// Bad - too deeply nested
+.notification {
+  .banner {
+    .container {
+      .heading {
+        .text {
+          font-weight: bold;
+        }
+      }
+    }
+  }
+}
+```
+
+## Template Style Guide
+
+### Jinja2 Templates
+
+Templates use Jinja2 syntax with GOV.UK Frontend components:
+
+```html
+{% extends "withnav_template.html" %}
+{% from "components/banner.html" import banner_wrapper %}
+{% from "components/form.html" import form_wrapper %}
+{% from "govuk_frontend_jinja/components/button/macro.html" import govukButton %}
+
+{% block maincolumn_content %}
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1 class="govuk-heading-l">{{ page_title }}</h1>
+      
+      {% call form_wrapper() %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        {{ govukButton({ "text": "Submit" }) }}
+      {% endcall %}
+    </div>
+  </div>
+{% endblock %}
+```
+
+### Template Conventions
+
+- Use GOV.UK Frontend components via macros
+- Always include CSRF tokens in forms
+- Use semantic HTML5 elements
+- Follow accessibility guidelines (WCAG 2.1 AA)
+- Use `govuk-` prefixed classes
+
+## Test Code Style
+
+### Python Tests (pytest)
+
+```python
+import pytest
+from flask import request
+from werkzeug.exceptions import Forbidden
+
+from app.utils.user import user_has_permissions
+
+
+@pytest.mark.parametrize(
+    "permissions",
+    (
+        pytest.param(
+            ["send_messages"],
+            marks=pytest.mark.xfail(raises=Forbidden),
+        ),
+        ["manage_service"],
+        ["manage_templates", "manage_service"],
+    ),
+)
+def test_permissions(client_request, permissions, api_user_active):
+    request.view_args.update({"service_id": "foo"})
+    api_user_active["permissions"] = {
+        "foo": ["manage_users", "manage_templates"]
+    }
+    client_request.login(api_user_active)
+
+    @user_has_permissions(*permissions)
+    def index():
+        pass
+
+    index()
+```
+
+### JavaScript Tests (Jest)
+
+```javascript
+import Autofocus from '../../app/assets/javascripts/esm/autofocus.mjs';
+import { jest } from '@jest/globals';
+
+describe('Autofocus', () => {
+  let focusHandler;
+  let search;
+
+  beforeEach(() => {
+    document.body.classList.add('govuk-frontend-supported');
+    document.body.innerHTML = `
+      <input id="search" data-notify-module="autofocus">
+    `;
+    
+    focusHandler = jest.fn();
+    search = document.getElementById('search');
+    search.addEventListener('focus', focusHandler);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    search.removeEventListener('focus', focusHandler);
+  });
+
+  test('is focused when modules start', () => {
+    new Autofocus(document.querySelector('[data-notify-module="autofocus"]'));
+    expect(focusHandler).toHaveBeenCalled();
+  });
+});
+```
+
+## Editor Configuration
+
+### VS Code
+
+Recommended `.vscode/settings.json`:
+
+```json
+{
+  "python.linting.enabled": true,
+  "python.formatting.provider": "none",
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": true
+    }
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+    "editor.formatOnSave": true
+  },
+  "[scss]": {
+    "editor.defaultFormatter": "stylelint.vscode-stylelint",
+    "editor.formatOnSave": true
+  },
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true
+}
+```
+
+### Pre-commit Integration
+
+Pre-commit hooks automatically enforce these standards:
+
+```bash
+# Install hooks
+pre-commit install --install-hooks
+
+# Run manually
+pre-commit run --all-files
+```
+
+## Common Style Violations
+
+### Python
+
+| Issue | Solution |
+|-------|----------|
+| Line too long | Break into multiple lines or extract to variable |
+| Import order wrong | Run `make fix-imports` |
+| Print statement | Use `logging` module instead |
+| Missing type hints | Add type annotations to function signatures |
+| Unused imports | Remove or mark with `# noqa: F401` if needed |
+
+### JavaScript
+
+| Issue | Solution |
+|-------|----------|
+| Missing semicolon | Add semicolon at end of statement |
+| Undefined variable | Declare variable or add to globals config |
+| Unused variable | Remove or prefix with `_` |
+| Console.log in production | Remove or use proper logging |
+
+## Resources
+
+- [Ruff Documentation](https://docs.astral.sh/ruff/)
+- [ESLint Rules](https://eslint.org/docs/rules/)
+- [Stylelint Rules](https://stylelint.io/user-guide/rules/)
+- [GOV.UK Design System](https://design-system.service.gov.uk/)
+- [PEP 8 Style Guide](https://pep8.org/)

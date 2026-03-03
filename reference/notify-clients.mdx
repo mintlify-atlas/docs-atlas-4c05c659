@@ -1,0 +1,536 @@
+---
+title: API Clients
+description: Python API clients for interacting with GOV.UK Notify backend services
+---
+
+GOV.UK Notify Admin uses API clients to communicate with the backend API. All clients inherit from `NotifyAdminAPIClient` and provide methods for managing services, users, notifications, and other resources.
+
+## Base Client
+
+### NotifyAdminAPIClient
+
+Base class for all Notify API clients. Handles authentication, request headers, and common HTTP operations.
+
+**Location:** `app/notify_client/__init__.py`
+
+```python
+class NotifyAdminAPIClient(BaseAPIClient):
+    def __init__(self, app)
+    def generate_headers(self, api_token)
+```
+
+**Key Features:**
+- Automatic authentication with bearer tokens
+- Request tracking with user IDs in headers
+- Integration with Flask request context
+
+## Service Management
+
+### ServiceAPIClient
+
+Manages services, templates, guest lists, and service configuration.
+
+**Location:** `app/notify_client/service_api_client.py`
+
+<CodeGroup>
+```python Service Operations
+# Create a service
+service_id = service_api_client.create_service(
+    service_name="My Service",
+    organisation_type="central",
+    email_message_limit=1000,
+    international_sms_message_limit=100,
+    sms_message_limit=1000,
+    letter_message_limit=500,
+    restricted=True,
+    user_id=current_user.id
+)
+
+# Get service details
+service = service_api_client.get_service(service_id)
+
+# Update service
+service_api_client.update_service(
+    service_id,
+    name="Updated Name",
+    email_branding="govuk"
+)
+
+# Archive service
+service_api_client.archive_service(service_id, cached_service_user_ids)
+```
+
+```python Template Operations
+# Create template
+template = service_api_client.create_service_template(
+    name="Welcome Email",
+    type_="email",
+    content="Hello ((name)), welcome to our service.",
+    service_id=service_id,
+    subject="Welcome!",
+    parent_folder_id=None
+)
+
+# Get template
+template = service_api_client.get_service_template(
+    service_id,
+    template_id,
+    version=None
+)
+
+# Update template
+service_api_client.update_service_template(
+    service_id,
+    template_id,
+    content="Updated content",
+    subject="New subject"
+)
+
+# Delete template
+service_api_client.delete_service_template(service_id, template_id)
+```
+
+```python Reply-To Management
+# Add reply-to email
+service_api_client.add_reply_to_email_address(
+    service_id,
+    "replies@example.gov.uk",
+    is_default=True
+)
+
+# Update reply-to email
+service_api_client.update_reply_to_email_address(
+    service_id,
+    reply_to_email_id,
+    "new-replies@example.gov.uk",
+    is_default=False
+)
+
+# Get all reply-to addresses
+reply_tos = service_api_client.get_reply_to_email_addresses(service_id)
+```
+</CodeGroup>
+
+#### Key Methods
+
+<ParamField path="create_service" type="method">
+  Creates a new service with specified limits and configuration.
+  
+  **Parameters:**
+  - `service_name` (str): Service name
+  - `organisation_type` (str): Type of organisation
+  - `email_message_limit` (int): Daily email limit
+  - `international_sms_message_limit` (int): Daily international SMS limit
+  - `sms_message_limit` (int): Daily SMS limit
+  - `letter_message_limit` (int): Daily letter limit
+  - `restricted` (bool): Whether service is in trial mode
+  - `user_id` (str): ID of user creating the service
+  
+  **Returns:** Service ID (str)
+</ParamField>
+
+<ParamField path="get_service" type="method">
+  Retrieves service details. Results are cached.
+  
+  **Parameters:**
+  - `service_id` (str): Service ID
+  
+  **Returns:** Service data (dict)
+</ParamField>
+
+<ParamField path="update_service" type="method">
+  Updates service configuration. Only specific attributes are allowed.
+  
+  **Allowed attributes:** active, billing_contact_email_addresses, billing_contact_names, billing_reference, confirmed_email_sender_name, contact_link, email_branding, free_sms_fragment_limit, go_live_at, letter_branding, letter_contact_block, email_message_limit, name, notes, organisation_type, permissions, prefix_sms, rate_limit, reply_to_email_address, restricted, sms_sender, volume_email, volume_letter, volume_sms
+</ParamField>
+
+<ParamField path="get_service_statistics" type="method">
+  Gets notification statistics for a service.
+  
+  **Parameters:**
+  - `service_id` (str): Service ID
+  - `limit_days` (int, optional): Limit to notifications from last N days
+  
+  **Returns:** Statistics data (dict)
+</ParamField>
+
+## User Management
+
+### UserApiClient
+
+Manages user accounts, authentication, permissions, and WebAuthn credentials.
+
+**Location:** `app/notify_client/user_api_client.py`
+
+<CodeGroup>
+```python User Operations
+# Register new user
+user = user_api_client.register_user(
+    name="Jane Smith",
+    email_address="jane.smith@example.gov.uk",
+    mobile_number="07700900000",
+    password="secure-password",
+    auth_type="sms_auth"
+)
+
+# Get user by ID
+user = user_api_client.get_user(user_id)
+
+# Get user by email
+user = user_api_client.get_user_by_email("jane.smith@example.gov.uk")
+
+# Update user
+user_api_client.update_user_attribute(
+    user_id,
+    name="Jane Doe",
+    mobile_number="07700900001"
+)
+
+# Archive user
+user_api_client.archive_user(user_id)
+```
+
+```python Authentication
+# Send verification code
+user_api_client.send_verify_code(
+    user_id,
+    code_type="sms",  # or "email"
+    to="07700900000",
+    next_string="/dashboard"
+)
+
+# Check verification code
+success, error = user_api_client.check_verify_code(
+    user_id,
+    code="123456",
+    code_type="sms"
+)
+
+# Verify password
+is_valid = user_api_client.verify_password(user_id, password)
+
+# Update password
+user_api_client.update_password(user_id, new_password)
+```
+
+```python Service Permissions
+# Add user to service
+user_api_client.add_user_to_service(
+    service_id,
+    user_id,
+    permissions=["send_messages", "manage_templates"],
+    folder_permissions=[folder_id_1, folder_id_2]
+)
+
+# Update user permissions
+user_api_client.set_user_permissions(
+    user_id,
+    service_id,
+    permissions=["send_messages", "manage_settings"],
+    folder_permissions=[folder_id_1]
+)
+
+# Get users for service
+users = user_api_client.get_users_for_service(service_id)
+```
+</CodeGroup>
+
+#### Key Methods
+
+<ParamField path="register_user" type="method">
+  Creates a new user account.
+  
+  **Parameters:**
+  - `name` (str): Full name
+  - `email_address` (str): Email address
+  - `mobile_number` (str): Mobile number for SMS auth
+  - `password` (str): User password
+  - `auth_type` (str): Authentication method ("sms_auth", "email_auth", "webauthn_auth")
+  
+  **Returns:** User data (dict)
+</ParamField>
+
+<ParamField path="update_user_attribute" type="method">
+  Updates specific user attributes.
+  
+  **Allowed attributes:** name, email_address, mobile_number, auth_type, updated_by, current_session_id, email_access_validated_at, take_part_in_research, receives_new_features_email, platform_admin
+  
+  **Note:** platform_admin can only be set to False for security
+</ParamField>
+
+<ParamField path="send_verify_code" type="method">
+  Sends a verification code via SMS or email.
+  
+  **Parameters:**
+  - `user_id` (str): User ID
+  - `code_type` (str): "sms" or "email"
+  - `to` (str): Phone number or email address
+  - `next_string` (str, optional): URL to redirect to after verification
+</ParamField>
+
+<ParamField path="add_user_to_service" type="method">
+  Adds a user to a service with specific permissions.
+  
+  **Parameters:**
+  - `service_id` (str): Service ID
+  - `user_id` (str): User ID
+  - `permissions` (list): UI permission names (converted to DB permissions internally)
+  - `folder_permissions` (list): List of folder IDs user can access
+</ParamField>
+
+## Notification Management
+
+### NotificationApiClient
+
+Manages notifications, including sending, retrieving, and tracking notification status.
+
+**Location:** `app/notify_client/notification_api_client.py`
+
+<CodeGroup>
+```python Send Notifications
+# Send notification
+notification = notification_api_client.send_notification(
+    service_id,
+    template_id=template_id,
+    recipient="user@example.gov.uk",
+    personalisation={"name": "John"},
+    sender_id=sender_id
+)
+
+# Send precompiled letter
+notification_api_client.send_precompiled_letter(
+    service_id,
+    filename="letter.pdf",
+    file_id=file_id,
+    postage="second",
+    recipient_address={
+        "addressline1": "123 Example Street",
+        "addressline2": "London",
+        "postcode": "SW1A 1AA"
+    }
+)
+```
+
+```python Retrieve Notifications
+# Get notifications for service
+notifications = notification_api_client.get_notifications_for_service(
+    service_id,
+    template_type="email",
+    status="delivered",
+    page=1,
+    page_size=50
+)
+
+# Get single notification
+notification = notification_api_client.get_notification(
+    service_id,
+    notification_id
+)
+
+# Get notification count
+count = notification_api_client.get_notification_count_for_job_id(
+    service_id=service_id,
+    job_id=job_id
+)
+```
+
+```python Cancel Notification
+# Cancel a letter notification
+notification_api_client.update_notification_to_cancelled(
+    service_id,
+    notification_id
+)
+```
+</CodeGroup>
+
+#### Key Methods
+
+<ParamField path="get_notifications_for_service" type="method">
+  Retrieves notifications for a service with filtering options.
+  
+  **Parameters:**
+  - `service_id` (str): Service ID
+  - `job_id` (str, optional): Filter by job
+  - `template_type` (str, optional): "email", "sms", or "letter"
+  - `status` (str, optional): Notification status
+  - `page` (int, optional): Page number
+  - `page_size` (int, optional): Results per page
+  - `count_pages` (bool, optional): Whether to count total pages
+  - `limit_days` (int, optional): Limit to last N days
+  - `to` (str, optional): Filter by recipient (uses POST to avoid logging PII)
+  
+  **Returns:** Notifications data (dict)
+</ParamField>
+
+<ParamField path="send_notification" type="method">
+  Sends a notification using a template.
+  
+  **Parameters:**
+  - `service_id` (str): Service ID
+  - `template_id` (str): Template ID
+  - `recipient` (str): Email address or phone number
+  - `personalisation` (dict): Template placeholder values
+  - `sender_id` (str, optional): Sender ID to use
+  
+  **Returns:** Notification data (dict)
+</ParamField>
+
+## Job Management
+
+### JobApiClient
+
+Manages batch notification jobs and file uploads.
+
+**Location:** `app/notify_client/job_api_client.py`
+
+<CodeGroup>
+```python Job Operations
+# Create job
+job = job_api_client.create_job(
+    job_id,
+    service_id,
+    scheduled_for="2024-12-25 09:00:00",
+    contact_list_id=None
+)
+
+# Get job
+job = job_api_client.get_job(service_id, job_id)
+
+# Get all jobs
+jobs = job_api_client.get_jobs(
+    service_id,
+    limit_days=7,
+    statuses=["finished", "in progress"],
+    page=1
+)
+
+# Cancel job
+job_api_client.cancel_job(service_id, job_id)
+```
+
+```python Job Queries
+# Get scheduled jobs
+scheduled = job_api_client.get_scheduled_jobs(service_id)
+
+# Get immediate jobs
+immediate = job_api_client.get_immediate_jobs(service_id)
+
+# Check if service has jobs
+has_jobs = job_api_client.has_jobs(service_id)
+```
+</CodeGroup>
+
+#### Job Statuses
+
+The `JobApiClient` defines several job status constants:
+
+- `scheduled` - Job is scheduled for future sending
+- `pending` - Job is queued but not yet processing
+- `in progress` - Job is currently being processed
+- `finished` - Job completed successfully
+- `finished all notifications created` - All notifications created from job
+- `cancelled` - Job was cancelled
+- `sending limits exceeded` - Job exceeded service limits
+- `ready to send` - Job ready to start
+- `sent to dvla` - Letter job sent to DVLA
+
+<ParamField path="create_job" type="method">
+  Creates a new batch notification job.
+  
+  **Parameters:**
+  - `job_id` (str): Unique job ID
+  - `service_id` (str): Service ID
+  - `scheduled_for` (str, optional): ISO datetime string for scheduled sending
+  - `contact_list_id` (str, optional): Contact list to use
+  
+  **Returns:** Job data (dict)
+</ParamField>
+
+<ParamField path="get_jobs" type="method">
+  Retrieves jobs for a service.
+  
+  **Parameters:**
+  - `service_id` (str): Service ID
+  - `limit_days` (int, optional): Only jobs from last N days
+  - `contact_list_id` (str, optional): Filter by contact list
+  - `statuses` (list, optional): Filter by job statuses
+  - `page` (int): Page number (default: 1)
+  
+  **Returns:** Jobs data with pagination (dict)
+</ParamField>
+
+## API Key Management
+
+### ApiKeyApiClient
+
+Manages service API keys for programmatic access.
+
+**Location:** `app/notify_client/api_key_api_client.py`
+
+```python
+# Get all API keys
+api_keys = api_key_api_client.get_api_keys(service_id)
+
+# Create API key
+key = api_key_api_client.create_api_key(
+    service_id,
+    key_name="Production API Key",
+    key_type="normal"  # or "team", "test"
+)
+
+# Revoke API key
+api_key_api_client.revoke_api_key(service_id, key_id)
+```
+
+<ParamField path="create_api_key" type="method">
+  Creates a new API key for a service.
+  
+  **Parameters:**
+  - `service_id` (str): Service ID
+  - `key_name` (str): Descriptive name for the key
+  - `key_type` (str): Type of key ("normal", "team", "test")
+  
+  **Returns:** API key data including the key secret (dict)
+  
+  **Note:** The key secret is only returned once on creation
+</ParamField>
+
+## Caching
+
+Many API client methods use Redis caching to improve performance:
+
+- `@cache.set("cache-key")` - Caches the result
+- `@cache.delete("cache-key")` - Invalidates cache on update
+- `@cache.delete_by_pattern("pattern*")` - Invalidates multiple cache entries
+
+```python
+# Example: get_service is cached
+@cache.set("service-{service_id}")
+def get_service(self, service_id):
+    return self.get(f"/service/{service_id}")
+
+# update_service invalidates the cache
+@cache.delete("service-{service_id}")
+def update_service(self, service_id, **kwargs):
+    return self.post(f"/service/{service_id}", data)
+```
+
+## Error Handling
+
+All clients inherit error handling from `BaseAPIClient`. Common exceptions:
+
+- `HTTPError` - Raised for HTTP error responses (4xx, 5xx)
+- `InviteTokenError` - Raised for invalid invite tokens
+
+```python
+from notifications_python_client.errors import HTTPError
+
+try:
+    user = user_api_client.get_user_by_email(email)
+except HTTPError as e:
+    if e.status_code == 404:
+        # User not found
+        user = None
+    else:
+        raise
+```

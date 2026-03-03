@@ -1,0 +1,565 @@
+---
+title: Authentication
+description: Configure two-factor authentication, WebAuthn security keys, and sign-in methods for GOV.UK Notify
+---
+
+## Overview
+
+GOV.UK Notify uses two-factor authentication (2FA) to secure user accounts. This guide covers all authentication methods, from SMS codes to security keys, and how to configure them for your team.
+
+## Authentication Methods
+
+Notify supports three authentication methods:
+
+<CardGroup cols={3}>
+  <Card title="Text Message" icon="comment-sms">
+    Receive verification codes via SMS to your mobile number
+  </Card>
+  
+  <Card title="Email Link" icon="envelope">
+    Click a link sent to your email address to sign in
+  </Card>
+  
+  <Card title="Security Key" icon="key">
+    Use a physical WebAuthn security key (YubiKey, etc.)
+  </Card>
+</CardGroup>
+
+## Sign-In Process
+
+Basic sign-in flow for all users:
+
+<Steps>
+  <Step title="Enter Email and Password">
+    Navigate to sign-in page and provide:
+    - Email address (must be added to a service)
+    - Password (minimum 8 characters)
+    
+    <Note>
+      Passwords must not be commonly used passwords and should be unique to Notify.
+    </Note>
+  </Step>
+
+  <Step title="Two-Factor Verification">
+    Based on your authentication method:
+    
+    **Text message (SMS)**
+    - 6-digit code sent to your mobile
+    - Enter code at `/two-factor-sms`
+    - Code expires after 15 minutes
+    
+    **Email link**
+    - Link sent to your email
+    - Click link at `/email-auth/{token}`
+    - Link expires after 1 hour
+    - Automatic sign-in after clicking
+    
+    **Security key (WebAuthn)**
+    - Prompt to insert/tap security key
+    - Follow browser WebAuthn flow at `/two-factor-webauthn`
+    - Immediate authentication
+  </Step>
+
+  <Step title="Access Dashboard">
+    After successful verification, you're signed in and redirected to:
+    - Your services dashboard
+    - Previously requested page
+    - Default landing page
+  </Step>
+</Steps>
+
+## Two-Factor Authentication Methods
+
+### SMS Authentication
+
+**How it works:**
+1. Sign in with email and password
+2. Receive SMS with 6-digit code
+3. Enter code within 15 minutes
+4. Access granted
+
+**Requirements:**
+- Valid UK mobile number (or international if enabled)
+- Ability to receive SMS
+- Network coverage
+
+**Code not received?**
+- Navigate to `/two-factor-sms-sent`
+- Click "Not received a text message?"
+- Request new code (limit: 10 codes per hour)
+- Check phone number is correct
+- Verify network signal
+
+<Warning>
+  SMS codes expire after 15 minutes. Request a new code if expired.
+</Warning>
+
+### Email Authentication
+
+**How it works:**
+1. Sign in with email and password
+2. Click link in email sent to your address
+3. Automatic sign-in via secure token
+4. Access granted
+
+**Requirements:**
+- Access to email account
+- Click link within 1 hour expiry
+- JavaScript enabled for interstitial page
+
+**Token validation:**
+- Tokens are single-use
+- Expired tokens show "link invalid" page
+- Used tokens cannot be reused
+- Secure signature prevents tampering
+
+**Email not received?**
+- Check spam/junk folder
+- Verify email address is correct
+- Request new email
+- Wait 2-3 minutes for delivery
+
+<Note>
+  Email authentication is only available if enabled for your service by a service manager.
+</Note>
+
+### WebAuthn Security Keys
+
+**Supported keys:**
+- YubiKey (all WebAuthn-compatible models)
+- Google Titan Security Key
+- Windows Hello
+- Touch ID (macOS/iOS)
+- Android fingerprint
+- Other FIDO2-certified authenticators
+
+**How it works:**
+1. Sign in with email and password
+2. Browser prompts for security key
+3. Insert/tap key or use biometric
+4. Cryptographic challenge verified
+5. Immediate access granted
+
+**Advantages:**
+- Most secure method
+- Phishing-resistant  
+- Faster than SMS/email
+- Works offline
+- No codes to type
+
+## Setting Up WebAuthn
+
+Users can register security keys for enhanced security:
+
+<Steps>
+  <Step title="Ensure Eligibility">
+    WebAuthn requires:
+    - Modern browser (Chrome 67+, Firefox 60+, Safari 13+, Edge 18+)
+    - HTTPS connection
+    - Compatible security key or biometric device
+    - User account with mobile number (fallback)
+  </Step>
+
+  <Step title="Navigate to Settings">
+    From your account:
+    - Go to "Your profile"
+    - Click "Security keys"
+    - Or navigate directly to `/webauthn/register`
+    
+    <Note>
+      You must be signed in to register security keys.
+    </Note>
+  </Step>
+
+  <Step title="Register Security Key">
+    Click "Add security key":
+    1. Browser requests permission
+    2. Insert/tap your security key when prompted
+    3. Follow browser-specific flow:
+       - Touch key sensor (YubiKey)
+       - Tap NFC device (mobile)
+       - Use biometric (Touch ID, Windows Hello)
+    4. Key registered with unique credential
+  </Step>
+
+  <Step title="Verify Registration">
+    After successful registration:
+    - Confirmation message displayed
+    - Auth type automatically changed to "webauthn_auth"
+    - Key listed in your security keys
+    - Can add multiple keys (recommended)
+    
+    <Tip>
+      Register multiple security keys as backups in case you lose one.
+    </Tip>
+  </Step>
+
+  <Step title="Test Security Key">
+    Sign out and sign back in:
+    - Enter email and password
+    - WebAuthn prompt appears automatically
+    - Use security key to authenticate
+    - Verify it works before relying on it
+  </Step>
+</Steps>
+
+### Managing Security Keys
+
+View and manage keys in your profile:
+
+- **View registered keys** - See all active keys
+- **Remove keys** - Delete compromised or lost keys
+- **Add backup keys** - Register additional keys
+
+<Warning>
+  Keep at least one security key registered. If you lose all keys and have no fallback, you'll need admin assistance to regain access.
+</Warning>
+
+## Service-Level Authentication Settings
+
+Service managers can control authentication methods for their team.
+
+### Email Authentication for Services
+
+Enable or disable email authentication at `/services/{service_id}/service-settings/set-auth-type`.
+
+<Steps>
+  <Step title="Access Settings">
+    Navigate to:
+    - Service settings
+    - Sign-in method
+    - Or directly to `/services/{service_id}/service-settings/set-auth-type`
+  </Step>
+
+  <Step title="Choose Sign-In Method">
+    Select:
+    
+    **Text message only** - SMS codes required
+    - Most secure default
+    - All users must have mobile numbers
+    - No email authentication allowed
+    
+    **Text message or email link** - Users choose
+    - More flexible
+    - Users without phones can use email
+    - Slightly less secure
+  </Step>
+
+  <Step title="Set User Preferences">
+    If enabling email auth, choose which team members can use it at `/services/{service_id}/service-settings/set-auth-type/users`:
+    
+    - Select users who should use email authentication
+    - Others remain on SMS authentication
+    - You cannot change WebAuthn users (they stay on security keys)
+  </Step>
+
+  <Step title="Save Changes">
+    Confirm:
+    - Settings apply immediately
+    - Users are notified of changes
+    - Next sign-in uses new method
+  </Step>
+</Steps>
+
+### Disabling Email Authentication
+
+To disable email auth:
+
+<Steps>
+  <Step title="Check Prerequisites">
+    Ensure all users have mobile numbers:
+    - At `/services/{service_id}/service-settings/set-auth-type`
+    - List shows users without phone numbers
+    - Cannot disable if users lack mobile numbers
+  </Step>
+
+  <Step title="Confirm Disable">
+    At `/services/{service_id}/service-settings/set-auth-type/confirm`:
+    - Review which users will be affected
+    - Confirm understanding
+    - All email auth users switched to SMS automatically
+  </Step>
+
+  <Step title="Verify Changes">
+    After disabling:
+    - All users must use SMS or WebAuthn
+    - Email authentication no longer available
+    - Users notified of change
+  </Step>
+</Steps>
+
+<Warning>
+  If users without mobile numbers exist, you cannot disable email authentication. Add mobile numbers first or remove those users.
+</Warning>
+
+### Platform Admin Permissions
+
+Platform admins can enable special email authentication permission at `/services/{service_id}/service-settings/permissions/email_auth`:
+
+- Allows service managers to offer email authentication
+- Toggles the capability for the service
+- Does not automatically enable for users
+- Service managers must then configure per-user settings
+
+## Account Security
+
+### Password Requirements
+
+**Minimum requirements:**
+- At least 8 characters
+- Not a commonly used password
+- Not the same as your email address
+- Maximum 255 characters
+
+**Best practices:**
+- Use a unique password for Notify
+- Include mix of characters, numbers, symbols
+- Use a password manager
+- Don't reuse passwords from other services
+- Change if compromised
+
+### Password Reset
+
+If you forget your password:
+
+<Steps>
+  <Step title="Request Reset">
+    Click "Forgot password?" on sign-in page:
+    - Enter your email address
+    - Check email for reset link
+    - Link expires after 1 hour
+  </Step>
+
+  <Step title="Create New Password">
+    Click link in email:
+    - Enter new password (meeting requirements)
+    - Confirm new password
+    - Save
+  </Step>
+
+  <Step title="Sign In">
+    Use new password to sign in:
+    - Complete 2FA as normal
+    - Access restored
+  </Step>
+</Steps>
+
+### Email Revalidation
+
+Periodically, Notify requires email revalidation:
+
+**When triggered:**
+- Email address change
+- Security policy requirement
+- Long period without sign-in
+
+**Process:**
+1. Sign in with password
+2. Complete normal 2FA (SMS/WebAuthn)
+3. Email sent for revalidation at `/re-validate-email`
+4. Click link in email
+5. Email confirmed, access granted
+
+<Note>
+  Email revalidation is separate from 2FA and happens after successful 2FA.
+</Note>
+
+## Troubleshooting Authentication
+
+<AccordionGroup>
+  <Accordion title="Cannot receive SMS codes">
+    **Possible causes:**
+    - No network coverage
+    - Phone is off
+    - Number is incorrect
+    - SMS blocked by carrier
+    - Rate limit reached (10 codes/hour)
+    
+    **Solutions:**
+    - Check phone signal
+    - Verify phone number in profile
+    - Try email authentication (if enabled)
+    - Wait 1 hour if rate limited
+    - Contact service manager to update number
+  </Accordion>
+
+  <Accordion title="Email link doesn't work">
+    **Possible causes:**
+    - Link expired (1 hour limit)
+    - Link already used
+    - JavaScript disabled
+    - Token tampered with
+    
+    **Solutions:**
+    - Request new email
+    - Enable JavaScript in browser
+    - Copy full URL from email
+    - Check email was sent to correct address
+  </Accordion>
+
+  <Accordion title="Security key not recognized">
+    **Possible causes:**
+    - Incompatible browser
+    - Key not inserted properly
+    - USB port issue
+    - Bluetooth not enabled (for NFC keys)
+    - Key not registered
+    
+    **Solutions:**
+    - Use Chrome, Firefox, Safari, or Edge
+    - Re-insert key firmly
+    - Try different USB port
+    - Enable Bluetooth for NFC
+    - Register key first
+    - Use fallback SMS authentication
+  </Accordion>
+
+  <Accordion title="WebAuthn registration fails">
+    **Common errors:**
+    - Browser doesn't support WebAuthn
+    - HTTPS required but missing
+    - Key already registered to another user
+    - Timeout during registration
+    
+    **Solutions:**
+    - Update browser to latest version
+    - Ensure using HTTPS (not HTTP)
+    - Try different security key
+    - Complete registration faster
+    - Check browser console for errors
+  </Accordion>
+
+  <Accordion title="Locked out of account">
+    **If you cannot access your account:**
+    
+    **Lost security key:**
+    - Use backup security key if registered
+    - Contact service manager
+    - Account can be reset by admin
+    
+    **Lost phone (SMS):**
+    - Contact service manager to update number
+    - Email authentication if enabled
+    - Manager can change your auth method
+    
+    **Lost email access:**
+    - Contact service manager immediately
+    - Email address must be updated
+    - Admin intervention required
+  </Accordion>
+
+  <Accordion title="Too many failed login attempts">
+    After 10 failed login attempts:
+    - Account is temporarily locked
+    - Lock duration: 1 hour
+    - Cannot sign in during lockout
+    
+    **Solutions:**
+    - Wait 1 hour for automatic unlock
+    - Check password is correct
+    - Reset password if forgotten
+    - Contact admin if locked repeatedly
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Security Keys" icon="shield-check">
+    WebAuthn security keys provide the strongest protection against phishing and account takeover.
+  </Card>
+  
+  <Card title="Register Backup Keys" icon="key">
+    Keep multiple security keys registered in case you lose one.
+  </Card>
+  
+  <Card title="Keep Contact Info Updated" icon="address-card">
+    Ensure mobile number and email are current for account recovery.
+  </Card>
+  
+  <Card title="Use Strong Passwords" icon="lock">
+    Choose unique passwords not used on other services.
+  </Card>
+  
+  <Card title="Enable Email Auth Carefully" icon="envelope-open-text">
+    Email authentication is less secure than SMS. Only enable if needed.
+  </Card>
+  
+  <Card title="Monitor Sign-In Activity" icon="clock-rotate-left">
+    Review your sign-in history for suspicious activity.
+  </Card>
+</CardGroup>
+
+## Authentication Flow Reference
+
+### SMS Authentication Flow
+
+```
+User enters email + password
+  ↓
+API validates credentials
+  ↓
+SMS code sent to mobile
+  ↓
+User enters code at /two-factor-sms
+  ↓
+API validates code
+  ↓
+Email revalidation (if needed)
+  ↓
+Session created, user signed in
+```
+
+### Email Authentication Flow
+
+```
+User enters email + password
+  ↓
+API validates credentials
+  ↓
+Email with token link sent
+  ↓
+User clicks link in email
+  ↓
+Interstitial page at /email-auth/{token}
+  ↓
+POST validates token
+  ↓
+Email revalidation (if needed)
+  ↓
+Session created, user signed in
+```
+
+### WebAuthn Authentication Flow
+
+```
+User enters email + password
+  ↓
+API validates credentials
+  ↓
+Browser requests security key at /two-factor-webauthn
+  ↓
+WebAuthn challenge generated
+  ↓
+User taps/inserts security key
+  ↓
+Cryptographic signature verified
+  ↓
+API confirms authentication
+  ↓
+Email revalidation (if needed)
+  ↓
+Session created, user signed in
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Managing Services" href="/guides/managing-services">
+    Configure service-level authentication settings
+  </Card>
+  
+  <Card title="Managing Users" href="/guides/managing-services#managing-users">
+    Invite team members and set permissions
+  </Card>
+</CardGroup>

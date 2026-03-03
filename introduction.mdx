@@ -1,0 +1,169 @@
+---
+title: GOV.UK Notify Admin
+description: Manage your government notification services with the GOV.UK Notify administration platform
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="GOV.UK Notify Admin Hero"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="GOV.UK Notify Admin Hero"
+/>
+
+## Welcome to GOV.UK Notify Admin
+
+GOV.UK Notify Admin is the official administration platform for managing government notification services across the UK. Built with Flask and Python, it provides a secure, user-friendly interface for creating and managing email, SMS, and letter notifications at scale.
+
+<CardGroup cols={2}>
+  <Card
+    title="Getting started"
+    icon="rocket"
+    href="/getting-started"
+  >
+    Set up your first service and start sending notifications
+  </Card>
+  <Card
+    title="Architecture"
+    icon="sitemap"
+    href="/architecture"
+  >
+    Understand the system design and components
+  </Card>
+  <Card
+    title="User management"
+    icon="users"
+    href="/essentials/user-management"
+  >
+    Manage team members, permissions, and roles
+  </Card>
+  <Card
+    title="Templates"
+    icon="file-lines"
+    href="/essentials/templates"
+  >
+    Create and manage notification templates
+  </Card>
+</CardGroup>
+
+## Key features
+
+### Multi-channel notifications
+
+Send notifications via multiple channels from a single platform:
+
+- **Email** - Customizable email templates with branding support and file attachments
+- **SMS** - Text messages with international support and UK landline capability
+- **Letters** - Physical mail with PDF generation, branding, and postage options (first class, second class, economy, international)
+
+### Service management
+
+Create and manage multiple services with independent configurations:
+
+- Role-based permissions (manage users, send messages, manage templates, manage API keys, view activity)
+- Customizable service names and contact details
+- Organization hierarchies with team structures
+- Trial mode for testing with automatic transition to live services
+- Message rate limits and daily allowances per service
+
+### Template creation and management
+
+Powerful template system with:
+
+- Visual template editor for emails, SMS, and letters
+- Placeholder variables for personalized content (e.g., `((name))`, `((reference))`)
+- Template folders for organization
+- Template versioning and history
+- Welsh language support for letter templates
+- Live preview with test data
+- Character and page count estimation
+
+### Batch sending via CSV upload
+
+Send notifications to multiple recipients efficiently:
+
+- Upload CSV files with recipient data and template variables
+- Validation of recipient information before sending
+- Guest list functionality for testing with restricted recipients
+- Contact list management for reusable recipient groups
+- Schedule sends for future dates and times
+- Job tracking with status monitoring
+
+### Real-time dashboard and analytics
+
+Comprehensive visibility into your notification activity:
+
+- Live statistics for sent, delivered, and failed notifications
+- 7-day activity summaries with template usage breakdown
+- Monthly and annual usage reports
+- Financial year tracking with cost breakdowns
+- Template performance metrics
+- Inbox for inbound SMS messages
+- Notification history with search and filtering
+
+### Enterprise security
+
+Robust security features for government use:
+
+- Multi-factor authentication with SMS, email, and WebAuthn support
+- Session management with configurable timeouts (20-hour sessions, 30-minute platform admin timeout)
+- Role-based access control with granular permissions
+- API key management with test, team, and live key types
+- Antivirus scanning for uploaded files
+- CSRF protection and secure headers (CSP, HSTS, X-Frame-Options)
+
+### Organization management
+
+Manage multiple organizations and their services:
+
+- Organization types (central government, local government, NHS, emergency services, schools, other)
+- Crown status tracking for appropriate branding
+- Domain-based organization association
+- Agreement signing workflow for terms of service
+- Billing details and purchase order tracking
+- Go-live request management with approval workflows
+
+### API integration
+
+Programmatic access for developers:
+
+- RESTful API for sending notifications
+- API key generation with different access levels
+- Callback webhooks for delivery status updates
+- Comprehensive API documentation
+- Python client library support
+
+### Branding customization
+
+Customize the appearance of your notifications:
+
+- Email branding with custom logos (108px minimum height, 640px maximum width)
+- Letter branding with organization logos and addresses
+- Branding pools for shared branding across services
+- CDN-hosted logo delivery for performance
+
+## Who uses GOV.UK Notify Admin?
+
+GOV.UK Notify Admin is used by UK government departments, NHS organizations, local authorities, and emergency services to communicate with citizens. The platform handles millions of notifications annually, from appointment reminders to critical service updates.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick start guide"
+    icon="play"
+    href="/getting-started"
+  >
+    Create your first service and send a notification in minutes
+  </Card>
+  <Card
+    title="Explore the architecture"
+    icon="diagram-project"
+    href="/architecture"
+  >
+    Learn how the system works under the hood
+  </Card>
+</CardGroup>

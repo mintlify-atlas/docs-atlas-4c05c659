@@ -1,0 +1,323 @@
+---
+title: Sending notifications
+description: Send emails, SMS, and letters through the GOV.UK Notify Admin interface using single sends, batch uploads, contact lists, and scheduled jobs
+---
+
+GOV.UK Notify Admin provides multiple ways to send notifications to your users, from quick one-off messages to large batch sends via CSV upload.
+
+## Single notification workflow
+
+Send individual notifications directly through the admin interface without uploading files.
+
+### Sending a one-off notification
+
+<Steps>
+  <Step title="Select a template">
+    Navigate to your service dashboard and choose the template you want to use for sending.
+  </Step>
+  
+  <Step title="Set sender (if multiple options)">
+    If your service has multiple sender addresses or phone numbers configured:
+    - **Email**: Choose which reply-to address to use
+    - **SMS**: Select which sender ID to use (shows which receives replies with "Receives replies" hint)
+    
+    The default sender is marked with "(Default)" hint text.
+  </Step>
+  
+  <Step title="Enter recipient details">
+    Provide the recipient information:
+    - **Email**: Email address
+    - **SMS**: Phone number (supports international numbers if enabled)
+    - **Letter**: Full postal address (address lines 1-7)
+    
+    For letters, use the dedicated address form that validates the address format.
+  </Step>
+  
+  <Step title="Fill in placeholders">
+    Complete any template placeholders in step-by-step forms. Each placeholder gets its own screen with validation.
+  </Step>
+  
+  <Step title="Preview and confirm">
+    Review the notification preview showing:
+    - Final rendered content with all placeholders filled
+    - Recipient information
+    - Sender details (for emails and SMS)
+    
+    For letters, preview shows the actual letter pages with formatting.
+  </Step>
+  
+  <Step title="Send">
+    Click the send button to immediately dispatch the notification.
+  </Step>
+</Steps>
+
+<Note>
+For SMS, you can use the "Use my phone number" skip link to quickly send a test message to yourself if you have the `manage_templates` and `manage_service` permissions.
+</Note>
+
+## CSV batch upload
+
+Send notifications to multiple recipients by uploading a spreadsheet file.
+
+### Supported file formats
+
+- CSV (Comma Separated Values)
+- TSV (Tab Separated Values)
+- ODS (Open Document Spreadsheet)
+- Microsoft Excel spreadsheet (.xlsx)
+
+### Upload workflow
+
+<Steps>
+  <Step title="Prepare your file">
+    Create a spreadsheet with:
+    - **First column**: Recipient information (email address, phone number, or address lines for letters)
+    - **Additional columns**: Values for any template placeholders
+    
+    Download the example CSV from the upload page to see the exact format required.
+  </Step>
+  
+  <Step title="Upload the file">
+    Use the file upload form at `/services/{service_id}/send/{template_id}/csv` to select and upload your spreadsheet.
+    
+    The file is uploaded to S3 and assigned a unique `upload_id`.
+  </Step>
+  
+  <Step title="Review validation results">
+    Notify validates your file and shows:
+    - **Column errors**: Missing required columns, duplicate headers, wrong column names
+    - **Row errors**: Invalid email addresses, phone numbers, or addresses
+    - **Message count**: Total recipients and whether you're within limits
+    - **Preview**: First 50 rows with the template applied
+    
+    You can click individual row numbers to preview that specific message.
+  </Step>
+  
+  <Step title="Choose scheduling (optional)">
+    For emails and SMS (not letters), select when to send:
+    - **Now**: Send immediately
+    - **Scheduled**: Choose a specific date and time
+  </Step>
+  
+  <Step title="Start the job">
+    Click "Send [X] messages" to create the job. The system:
+    - Creates a job record with status tracking
+    - Processes each row into individual notifications
+    - Shows real-time progress on the job page
+  </Step>
+</Steps>
+
+### Validation checks
+
+Notify performs comprehensive validation:
+
+- **Too many rows**: Maximum recipients per upload (service-specific limits)
+- **Missing columns**: Required recipient column and all placeholder columns must be present
+- **Invalid recipients**: 
+  - Emails: Valid email format
+  - SMS: Valid phone numbers (with international SMS permission check)
+  - Letters: Minimum 3 lines, maximum 7 lines for address
+- **Trial mode restrictions**: In trial mode, can only send to team members and guest list
+- **Remaining messages**: Checks against your daily/annual sending limits
+
+<Warning>
+If you've sent the same file previously with the same template version, Notify will warn you to prevent duplicate sends.
+</Warning>
+
+## Contact lists
+
+Reusable lists of recipients that can be used with any compatible template.
+
+### Creating a contact list
+
+<Steps>
+  <Step title="Upload a contact list file">
+    Navigate to **Upload contact list** and upload a file containing:
+    - Single column with header `email address` or `phone number`
+    - One recipient per row
+    
+    Maximum 50 rows shown in preview, up to 50 errors displayed.
+  </Step>
+  
+  <Step title="Validation">
+    The system validates:
+    - Only one column (email address OR phone number, not both)
+    - Valid email/phone format for each row
+    - Not too many rows (service limits apply)
+    - Trial mode restrictions (if applicable)
+  </Step>
+  
+  <Step title="Save the contact list">
+    Once validated, save the contact list. It appears in your uploads page with:
+    - Original filename
+    - Template type (email or SMS)
+    - Row count
+  </Step>
+</Steps>
+
+### Using contact lists
+
+When sending from a template:
+
+1. Select "Send using a contact list" option
+2. Choose from your saved contact lists (filtered by template type)
+3. The contact list is copied to a new upload for the job
+4. Follow the standard batch send workflow
+
+<Note>
+Contact lists can be reused multiple times and are shown on the first page of your uploads alongside scheduled jobs.
+</Note>
+
+## Letter uploads
+
+Upload pre-compiled PDF letters for sending.
+
+### PDF upload workflow
+
+<Steps>
+  <Step title="Upload a PDF">
+    Navigate to **Upload letter** and upload a PDF file.
+  </Step>
+  
+  <Step title="PDF sanitization">
+    Notify's template preview service:
+    - Validates the PDF structure
+    - Sanitizes the content
+    - Extracts the recipient address from the letter
+    - Counts pages
+    - Checks for content outside printable area
+  </Step>
+  
+  <Step title="Review validation">
+    If validation fails, you'll see specific errors:
+    - **Invalid PDF**: Cannot read the PDF file
+    - **Content outside printable area**: Shows affected page numbers
+    - **Letter too long**: More than 10 pages
+    
+    Invalid pages are highlighted in the preview.
+  </Step>
+  
+  <Step title="Select postage">
+    For valid letters, choose the postage type:
+    - First class
+    - Second class
+    - International (if enabled)
+  </Step>
+  
+  <Step title="Send">
+    Submit to send the letter. The original PDF is backed up to S3, and the sanitized version is used for printing.
+  </Step>
+</Steps>
+
+### Letter printing schedule
+
+Letters are printed according to this schedule:
+- Upload before 5:30pm: Printing starts today at 5:30pm
+- Upload after 5:30pm: Printing starts tomorrow at 5:30pm
+
+## Jobs and tracking
+
+### Job lifecycle
+
+When you start a batch send:
+
+1. **Job created**: Upload validated and job record created
+2. **Processing**: Notifications being created from CSV rows
+3. **Sending**: Notifications being sent to providers
+4. **Finished**: All notifications processed
+
+### Job page features
+
+- **Status counts**: Total, delivering, delivered, failed (with percentages)
+- **Real-time updates**: Page auto-refreshes via JSON API
+- **Notification list**: Individual notification statuses with filtering
+- **Download CSV**: Export job results (up to 5,000 rows per download)
+- **Original file**: Download the original CSV for scheduled jobs
+
+### Cancelling jobs
+
+<Tabs>
+  <Tab title="Letter jobs">
+    Cancel letter jobs before they're sent to the print provider:
+    
+    1. Navigate to the job page
+    2. Click **Cancel sending these letters**
+    3. Confirm cancellation
+    
+    **Requirements**:
+    - Job status must be finished creating notifications
+    - All notifications created (count matches total)
+    - Letters not yet sent to printer
+    
+    Shows how many letters were cancelled.
+  </Tab>
+  
+  <Tab title="Scheduled jobs">
+    Scheduled jobs can be cancelled before their scheduled time:
+    
+    1. View the scheduled job on dashboard or uploads page
+    2. Click to cancel
+    3. Confirm cancellation
+    
+    The CSV file remains available for download.
+  </Tab>
+</Tabs>
+
+## Uploads page
+
+The uploads page (`/services/{service_id}/uploads`) shows:
+
+- **Contact lists**: Saved reusable recipient lists (always on page 1)
+- **Scheduled jobs**: Jobs waiting to be sent (always on page 1)
+- **Completed uploads**: Historical batch sends (paginated)
+
+Each item shows:
+- Template name and type
+- Upload date/time
+- Recipient count
+- Status (for jobs)
+
+<Note>
+The uploads page replaced the older "Jobs" page and provides a unified view of all sending activity.
+</Note>
+
+## Error handling
+
+### Common errors and solutions
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| Service is in trial mode | Trying to send to non-team members | Add recipients to guest list or request live mode |
+| Exceeded send limits | Daily or annual limit reached | Wait for limit reset or contact support |
+| Message too long | SMS content exceeds character limit | Shorten template or personalisation content |
+| Letter too long | PDF has more than 10 pages | Split into multiple letters |
+| Invalid PDF | Corrupted or malformed PDF file | Save a new copy and try again |
+| Too many rows | CSV exceeds maximum recipients | Split into multiple uploads |
+
+### Trial mode sending
+
+In trial mode, notifications can only be sent to:
+- Team members (users added to the service)
+- Guest list entries (configured in API settings)
+
+The validation process checks all recipients against this list and shows errors for any non-allowed recipients.
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use contact lists" icon="users">
+    For frequently used recipient groups, create contact lists to avoid re-uploading the same data.
+  </Card>
+  
+  <Card title="Download example CSVs" icon="file-csv">
+    Always use the example CSV download for your template to ensure correct column headers.
+  </Card>
+  
+  <Card title="Preview before sending" icon="eye">
+    Review the preview page carefully, checking multiple rows to ensure personalisation works correctly.
+  </Card>
+  
+  <Card title="Monitor job progress" icon="chart-line">
+    For large batches, monitor the job page to catch any delivery issues early.
+  </Card>
+</CardGroup>

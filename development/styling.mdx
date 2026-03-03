@@ -1,0 +1,551 @@
+---
+title: SCSS and styling
+description: CSS architecture, SCSS patterns, and component styling in GOV.UK Notify Admin
+---
+
+## Overview
+
+GOV.UK Notify Admin uses **SCSS** (Sass) compiled via Rollup, extending [GOV.UK Frontend](https://frontend.design-system.service.gov.uk/) with custom components and utilities.
+
+## Architecture
+
+### File structure
+
+```
+app/assets/stylesheets/
+├── main.scss                      # Primary entry point
+├── print.scss                     # Print styles
+├── _globals.scss                  # Global styles and resets
+├── _reset.scss                    # Browser resets
+├── _grids.scss                    # Grid system
+├── _url-helpers.scss              # Asset URL functions
+├── _app.scss                      # Application-specific styles
+├── components/                    # UI components (32 files)
+│   ├── banner.scss
+│   ├── big-number.scss
+│   ├── browse-list.scss
+│   ├── checkboxes.scss
+│   ├── copy-to-clipboard.scss
+│   ├── file-upload.scss
+│   ├── live-search.scss
+│   ├── loading-indicator.scss
+│   └── ...
+├── views/                         # View-specific styles (12 files)
+│   ├── dashboard.scss
+│   ├── api.scss
+│   ├── branding.scss
+│   ├── template.scss
+│   └── ...
+├── local/                         # Local overrides
+│   └── typography.scss
+├── govuk-frontend/                # GOV.UK Frontend imports
+│   └── all.scss
+└── govuk-elements/                # Legacy GOV.UK Elements
+    ├── helpers.scss
+    ├── elements-typography.scss
+    └── tables.scss
+```
+
+### main.scss entry point
+
+```scss
+// Path to assets for use with file-url()
+$path: '/static/images/';
+
+// Enable new organisation colour palette
+$govuk-new-organisation-colours: true;
+
+// Use .govuk-frontend-supported for progressive enhancement
+$govuk-frontend-supported-css-class: 'govuk-frontend-supported';
+
+// Dependencies
+@import './url-helpers';
+@import './reset';
+@import './globals';
+
+// GOV.UK Frontend
+$govuk-new-link-styles: true;
+@import './govuk-frontend/all';
+
+// Legacy GOV.UK Elements (to be migrated)
+@import './govuk-elements/helpers';
+@import './govuk-elements/elements-typography';
+@import './govuk-elements/tables';
+
+// Custom components
+@import './local/typography';
+@import './grids';
+@import './components/placeholder';
+@import './components/sms-message';
+@import './components/page-footer';
+@import './components/table';
+@import './components/navigation';
+@import './components/big-number';
+@import './components/banner';
+// ... 20+ more component imports
+
+// View-specific styles
+@import './views/branding';
+@import './views/dashboard';
+@import './views/users';
+@import './views/api';
+@import './views/product-page';
+@import './views/template';
+// ... more view imports
+
+// Application styles
+@import './app';
+```
+
+## Configuration
+
+### Compilation settings
+
+From `rollup.config.mjs`:
+
+```javascript
+styles({
+  mode: "extract",
+  sass: {
+    includePaths: [
+      'node_modules/govuk-frontend/dist/',
+      'node_modules/'
+    ],
+    silenceDeprecations: [
+      "mixed-decls",
+      "global-builtin",
+      "color-functions",
+      "slash-div",
+      "import"
+    ]
+  },
+  minimize: true,
+  url: false,
+  sourceMap: true
+})
+```
+
+Features:
+- Extracts to separate CSS file (not CSS-in-JS)
+- Includes `node_modules` for importing packages
+- Minifies output
+- Generates sourcemaps
+- Silences Sass deprecation warnings
+
+### GOV.UK Frontend configuration
+
+Key settings:
+
+```scss
+// Use rebrand colour palette
+$govuk-new-organisation-colours: true;
+
+// Enable new link styles (underlines)
+$govuk-new-link-styles: true;
+
+// Progressive enhancement class
+$govuk-frontend-supported-css-class: 'govuk-frontend-supported';
+```
+
+## Global styles
+
+### _globals.scss
+
+```scss
+// IE10 desktop snap mode fix
+@-ms-viewport {
+  width: device-width;
+}
+
+// Font smoothing for consistency
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+b,
+strong {
+  font-weight: 600;
+}
+
+abbr[title] {
+  cursor: help;
+}
+
+// Hide JS-only content when unsupported
+.#{$govuk-frontend-supported-css-class} .js-hidden {
+  display: none;
+}
+
+// Form control focus styles
+input:focus,
+textarea:focus {
+  outline: 3px solid #FFDD00;  // GOV.UK focus colour
+  outline-offset: 0;
+}
+```
+
+### Asset URL helpers
+
+```scss
+// From _url-helpers.scss
+$path: '/static/images/';
+
+@function file-url($filename) {
+  @return url($path + $filename);
+}
+```
+
+Usage:
+```scss
+background-image: file-url('icon-check.svg');
+```
+
+## Component patterns
+
+### Progressive enhancement
+
+Components hidden until JavaScript is available:
+
+```scss
+// components/live-search.scss
+.live-search {
+  display: none;
+
+  .#{$govuk-frontend-supported-css-class} & {
+    display: block;
+  }
+}
+```
+
+This pattern ensures features requiring JavaScript don't appear in unsupported browsers.
+
+### Component structure
+
+Example: `components/checkboxes.scss`
+
+```scss
+.selection-summary {
+  position: relative;
+
+  .selection-summary__icon {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    width: 39px;
+    height: 30px;
+    display: none;
+
+    .#{$govuk-frontend-supported-css-class} & {
+      display: block;
+    }
+  }
+
+  .selection-summary__text {
+    @include govuk-font(19, $tabular: true);
+    padding: 5px 0 0 0;
+    margin-bottom: govuk-spacing(3);
+
+    &:focus {
+      outline: none;
+    }
+  }
+
+  .selection-summary__text--folders {
+    padding: 10px 15px 5px 51px;
+  }
+}
+```
+
+Key patterns:
+- BEM naming: `.selection-summary__icon`, `.selection-summary__text--folders`
+- GOV.UK Frontend mixins: `@include govuk-font()`
+- GOV.UK Frontend functions: `govuk-spacing()`
+- Progressive enhancement with `$govuk-frontend-supported-css-class`
+
+### Using GOV.UK Frontend utilities
+
+#### Typography
+
+```scss
+@include govuk-font(19);                    // 19px font
+@include govuk-font(24, $weight: bold);     // 24px bold
+@include govuk-font(16, $tabular: true);    // Tabular numbers
+```
+
+#### Spacing
+
+```scss
+margin-bottom: govuk-spacing(3);   // 15px
+padding: govuk-spacing(6);         // 30px
+```
+
+Spacing scale: 1 (5px), 2 (10px), 3 (15px), 4 (20px), 5 (25px), 6 (30px), 7 (40px), 8 (50px), 9 (60px)
+
+#### Colours
+
+```scss
+background-color: govuk-colour("blue");
+color: govuk-colour("white");
+border-color: govuk-colour("mid-grey");
+```
+
+#### Responsive design
+
+```scss
+@include govuk-media-query($from: tablet) {
+  .component {
+    display: flex;
+  }
+}
+
+@include govuk-media-query($until: tablet) {
+  .component {
+    display: block;
+  }
+}
+```
+
+Breakpoints: `mobile` (320px), `tablet` (641px), `desktop` (769px)
+
+## Component examples
+
+### Big number component
+
+```scss
+// components/big-number.scss
+.big-number {
+  @include govuk-font(80, $weight: bold, $tabular: true);
+  display: block;
+}
+
+.big-number-label {
+  @include govuk-font(24);
+  display: block;
+  color: govuk-colour("dark-grey");
+}
+```
+
+### Copy to clipboard
+
+```scss
+// components/copy-to-clipboard.scss
+.copy-to-clipboard {
+  position: relative;
+
+  &__button {
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+
+  &__notice {
+    @include govuk-font(16);
+    color: govuk-colour("green");
+    margin-top: govuk-spacing(2);
+  }
+}
+```
+
+### Loading indicator
+
+```scss
+// components/loading-indicator.scss
+.loading-indicator {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid govuk-colour("light-grey");
+  border-top-color: govuk-colour("blue");
+  border-radius: 50%;
+  animation: loading-spin 1s linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+```
+
+## View-specific styles
+
+Styles scoped to specific sections of the app:
+
+### views/dashboard.scss
+
+Styles for the dashboard page:
+
+```scss
+.dashboard-table {
+  @include govuk-font(19);
+  
+  &__cell--number {
+    @include govuk-font(24, $weight: bold, $tabular: true);
+  }
+}
+```
+
+### views/template.scss
+
+Styles for template editing:
+
+```scss
+.template-list-item {
+  &:not(:last-child) {
+    border-bottom: 1px solid govuk-colour("mid-grey");
+  }
+
+  &-hidden-by-default {
+    display: none;
+
+    &.visible-as-matches-search-query {
+      display: block;
+    }
+  }
+}
+```
+
+Note how `.visible-as-matches-search-query` is added by JavaScript (see `live-search.mjs`).
+
+## Print styles
+
+Separate print stylesheet in `print.scss`:
+
+```scss
+@import './url-helpers';
+@import './govuk-frontend/all';
+
+@media print {
+  .no-print {
+    display: none;
+  }
+
+  .page-break-before {
+    page-break-before: always;
+  }
+}
+```
+
+Loaded separately in templates:
+
+```jinja
+<link rel="stylesheet" media="print" href="{{ asset_url('stylesheets/print.css') }}" />
+```
+
+## Linting
+
+### Running the linter
+
+```bash
+npm run lint:scss
+```
+
+### Configuration
+
+Stylelint config in `package.json`:
+
+```json
+{
+  "devDependencies": {
+    "stylelint": "16.21.0",
+    "stylelint-config-gds": "2.0.0",
+    "stylelint-config-standard-scss": "15.0.1"
+  }
+}
+```
+
+Uses GDS (Government Digital Service) SCSS standards.
+
+## Best practices
+
+### 1. Use GOV.UK Frontend first
+
+Before writing custom styles, check if GOV.UK Frontend provides:
+- A component ([Button](https://design-system.service.gov.uk/components/button/), [Radios](https://design-system.service.gov.uk/components/radios/), etc.)
+- A utility (spacing, typography, colours)
+- A pattern (form validation, page templates)
+
+### 2. Follow BEM naming
+
+```scss
+// Good
+.component-name { }
+.component-name__element { }
+.component-name--modifier { }
+
+// Avoid
+.componentName { }
+.component_name { }
+.component .nested .selector { }
+```
+
+### 3. Progressive enhancement
+
+Hide JavaScript-dependent features:
+
+```scss
+.enhanced-feature {
+  display: none;
+
+  .govuk-frontend-supported & {
+    display: block;
+  }
+}
+```
+
+### 4. Use spacing and typography mixins
+
+```scss
+// Good
+@include govuk-font(19);
+margin-bottom: govuk-spacing(3);
+
+// Avoid
+font-size: 19px;
+margin-bottom: 15px;
+```
+
+This ensures consistency and makes future updates easier.
+
+### 5. Minimize nesting
+
+```scss
+// Good (max 2-3 levels)
+.component {
+  &__element {
+    &:hover { }
+  }
+}
+
+// Avoid deep nesting
+.component {
+  .element {
+    .sub-element {
+      .nested-thing {
+        .too-deep { }
+      }
+    }
+  }
+}
+```
+
+## Migration from GOV.UK Elements
+
+The codebase is transitioning from GOV.UK Elements to GOV.UK Frontend:
+
+```scss
+// Legacy imports (being phased out)
+@import './govuk-elements/helpers';
+@import './govuk-elements/elements-typography';
+@import './govuk-elements/tables';
+```
+
+When updating components, prefer GOV.UK Frontend equivalents.
+
+## Related documentation
+
+- [Static asset management](/development/static-assets) - Build process and compilation
+- [Templates and Jinja](/development/templates-and-jinja) - How styles connect to markup
+- [JavaScript architecture](/development/javascript) - JavaScript that manipulates styles
+- [GOV.UK Frontend documentation](https://frontend.design-system.service.gov.uk/)

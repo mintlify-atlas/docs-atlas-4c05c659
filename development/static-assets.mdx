@@ -1,0 +1,236 @@
+---
+title: Static asset management
+description: Build process, bundling, and deployment of static assets in GOV.UK Notify Admin
+---
+
+## Overview
+
+GOV.UK Notify Admin uses **Rollup** to bundle JavaScript (both ES5 and ESM), compile SCSS, and manage static assets like images, fonts, and error pages.
+
+### Asset directories
+
+- **Source**: `app/assets/` - Original JavaScript, SCSS, images, and error pages
+- **Output**: `app/static/` - Compiled, bundled assets served to browsers
+- **Dependencies**: `node_modules/` - Third-party packages including GOV.UK Frontend
+
+## Build process
+
+### Development workflow
+
+```bash
+# Initial setup
+make bootstrap
+
+# Watch mode (rebuild on file changes)
+make watch-frontend
+# Equivalent to: npm run watch
+
+# One-time build
+npm run build
+```
+
+The build process runs three parallel Rollup configurations:
+
+1. **ESM compilation** - Modern JavaScript modules
+2. **SCSS compilation** - Stylesheets with sourcemaps
+3. **ES5 compilation** - Legacy JavaScript bundle
+
+### Rollup configuration
+
+The build is defined in `rollup.config.mjs`:
+
+```javascript
+const paths = {
+  src: 'app/assets/',
+  dist: 'app/static/',
+  npm: 'node_modules/',
+  govuk_frontend: 'node_modules/govuk-frontend/dist/'
+};
+```
+
+#### ESM bundle
+
+Compiles modern JavaScript with tree-shaking and minification:
+
+```javascript
+{
+  input: paths.src + 'javascripts/esm/all-esm.mjs',
+  output: {
+    dir: paths.dist + 'javascripts/',
+    entryFileNames: 'all-esm.mjs',
+    format: 'es',
+    sourcemap: true
+  },
+  plugins: [
+    nodeResolve(),
+    terser(),
+    copy({ /* static asset copying */ })
+  ]
+}
+```
+
+This configuration also copies static assets:
+
+- Error pages from `app/assets/error_pages/`
+- Custom images from `app/assets/images/`
+- GOV.UK Frontend images (rebrand-aware)
+- GOV.UK Frontend fonts
+- Manifest file for PWA support
+
+#### SCSS compilation
+
+Compiles SCSS to minified CSS with sourcemaps:
+
+```javascript
+{
+  input: [
+    paths.src + 'stylesheets/main.scss',
+    paths.src + 'stylesheets/print.scss'
+  ],
+  plugins: [
+    styles({
+      mode: "extract",
+      sass: {
+        includePaths: [
+          paths.govuk_frontend,
+          paths.npm
+        ]
+      },
+      minimize: true,
+      url: false,
+      sourceMap: true
+    })
+  ]
+}
+```
+
+In production, PostCSS rewrites `/static/` URLs to `/` for CDN compatibility.
+
+#### ES5 bundle
+
+Bundles legacy JavaScript with jQuery and other dependencies:
+
+```javascript
+{
+  input: [
+    'node_modules/jquery/dist/jquery.min.js',
+    'node_modules/timeago/jquery.timeago.js',
+    'node_modules/textarea-caret/index.js',
+    'node_modules/cbor-js/cbor.js',
+    'app/assets/javascripts/modules.js',
+    'app/assets/javascripts/stick-to-window-when-scrolling.js',
+    'app/assets/javascripts/cookieCleanup.js',
+    'app/assets/javascripts/updateContent.js',
+    'app/assets/javascripts/templateFolderForm.js',
+    'app/assets/javascripts/main.js'
+  ],
+  output: {
+    dir: paths.dist + 'javascripts/',
+    sourcemap: true
+  },
+  plugins: [
+    multi({ entryFileName: 'all.js' }),
+    terser({ ecma: '5' })
+  ]
+}
+```
+
+## GOV.UK Frontend rebrand support
+
+The build supports both classic and rebranded GOV.UK Frontend assets:
+
+```javascript
+const enableRebrand = true;
+
+const govukFrontendAssetPaths = {
+  images: `${paths.govuk_frontend}govuk/assets/${enableRebrand ? 'rebrand/' : ''}images/**/*`,
+  fonts: `${paths.govuk_frontend}govuk/assets/fonts/**/*`,
+  manifest: `${paths.govuk_frontend}govuk/assets/${enableRebrand ? 'rebrand/' : ''}manifest.json`
+};
+```
+
+## Deployment
+
+### Local development
+
+When running locally, Flask serves static assets at `http://localhost:6012/static/`:
+
+```python
+# Flask serves from app/static/
+flask run -p 6012
+```
+
+### Production deployment
+
+Static files are uploaded to S3 and served via CloudFront CDN:
+
+```bash
+# Deploy to staging
+make staging upload-static
+
+# Deploy to production  
+make production upload-static
+```
+
+The upload command:
+
+```bash
+aws s3 cp --region eu-west-1 \
+  --recursive \
+  --cache-control max-age=315360000,immutable \
+  ./app/static \
+  s3://${DNS_NAME}-static
+```
+
+Cache headers:
+- **max-age=315360000** - 10 years (effectively permanent)
+- **immutable** - Prevents revalidation requests
+
+### Asset URL helpers
+
+Templates use the `asset_url()` helper which switches between local and CDN URLs:
+
+```jinja
+{# Local: /static/javascripts/all-esm.mjs #}
+{# Production: https://cdn.example.com/javascripts/all-esm.mjs #}
+<script type="module" src="{{ asset_url('javascripts/all-esm.mjs') }}"></script>
+```
+
+## Testing
+
+```bash
+# Lint SCSS
+npm run lint:scss
+
+# Lint JavaScript
+npm run lint:js
+
+# Run all tests (includes linting)
+npm test
+```
+
+## Dependencies
+
+### Build tools
+
+- **rollup** (4.44.1) - Module bundler
+- **@rollup/plugin-node-resolve** - Resolve node_modules imports
+- **@rollup/plugin-terser** - JavaScript minification
+- **rollup-plugin-styler** - SCSS compilation
+- **sass** (1.89.2) - SCSS compiler
+- **postcss-replace** - URL rewriting for production
+
+### Runtime dependencies
+
+- **govuk-frontend** (5.11.1) - Design system components
+- **jquery** (3.5.0) - DOM manipulation
+- **morphdom** (2.6.1) - Efficient DOM diffing
+- **timeago** (1.6.5) - Relative timestamps
+- **textarea-caret** (3.1.0) - Caret position detection
+- **cbor-js** (0.1.0) - WebAuthn credential encoding
+
+## Related documentation
+
+- [JavaScript architecture](/development/javascript)
+- [SCSS and styling](/development/styling)
+- [Templates and Jinja](/development/templates-and-jinja)

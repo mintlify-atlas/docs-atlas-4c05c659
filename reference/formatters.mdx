@@ -1,0 +1,929 @@
+---
+title: Formatters
+description: Formatting functions for dates, times, notifications, currency, and display text
+---
+
+Formatters provide consistent text formatting across the GOV.UK Notify Admin interface. All formatters are located in `app/formatters.py`.
+
+## Date and Time Formatters
+
+### Date Formatting
+
+#### format_date
+
+Formats date in full format with day name.
+
+```python
+from app.formatters import format_date
+
+formatted = format_date("2024-12-25T09:00:00Z")
+# Returns: "Wednesday 25 December 2024"
+```
+
+**Parameters:**
+- `date` (str): UTC datetime string
+
+**Returns:** `str` - Full date with day name
+
+**Format:** `%A %d %B %Y` (e.g., "Wednesday 25 December 2024")
+
+#### format_date_normal
+
+Formats date without day name, no leading zeros.
+
+```python
+from app.formatters import format_date_normal
+
+formatted = format_date_normal("2024-12-05T09:00:00Z")
+# Returns: "5 December 2024"
+```
+
+**Format:** `%d %B %Y` with leading zeros stripped
+
+#### format_date_short
+
+Formats date in short format (day and month only).
+
+```python
+from app.formatters import format_date_short
+
+formatted = format_date_short("2024-12-05T09:00:00Z")
+# Returns: "5 December"
+```
+
+**Format:** `%d %B` with leading zeros stripped
+
+#### format_date_numeric
+
+Formats date in ISO format (YYYY-MM-DD).
+
+```python
+from app.formatters import format_date_numeric
+
+formatted = format_date_numeric("2024-12-05T09:00:00Z")
+# Returns: "2024-12-05"
+```
+
+**Format:** `%Y-%m-%d`
+
+#### format_date_human
+
+Formats date as "today", "yesterday", "tomorrow", or date.
+
+```python
+from app.formatters import format_date_human
+
+formatted = format_date_human("2024-12-05T09:00:00Z")
+# Returns: "today" (if current date is 2024-12-05)
+# Returns: "yesterday" (if current date is 2024-12-06)
+# Returns: "5 December" (otherwise)
+```
+
+**Logic:**
+- Returns "tomorrow" for next day
+- Returns "today" for current day
+- Returns "yesterday" for previous day
+- Returns short date otherwise
+
+### Time Formatting
+
+#### format_time
+
+Formats time in 12-hour format with special cases.
+
+```python
+from app.formatters import format_time
+
+formatted = format_time("2024-12-05T00:00:00Z")
+# Returns: "midnight"
+
+formatted = format_time("2024-12-05T12:00:00Z")
+# Returns: "midday"
+
+formatted = format_time("2024-12-05T14:30:00Z")
+# Returns: "2:30pm"
+```
+
+**Special Cases:**
+- 12:00 AM → "midnight"
+- 12:00 PM → "midday"
+- Other times → 12-hour format (lowercase)
+
+#### format_time_24h
+
+Formats time in 24-hour format.
+
+```python
+from app.formatters import format_time_24h
+
+formatted = format_time_24h("2024-12-05T14:30:00Z")
+# Returns: "14:30"
+```
+
+**Format:** `%H:%M`
+
+### Combined Date and Time
+
+#### format_datetime
+
+Combines full date and time.
+
+```python
+from app.formatters import format_datetime
+
+formatted = format_datetime("2024-12-25T14:30:00Z")
+# Returns: "Wednesday 25 December 2024 at 2:30pm"
+```
+
+#### format_datetime_normal
+
+Combines normal date and time.
+
+```python
+from app.formatters import format_datetime_normal
+
+formatted = format_datetime_normal("2024-12-05T14:30:00Z")
+# Returns: "5 December 2024 at 2:30pm"
+```
+
+#### format_datetime_short
+
+Combines short date and time.
+
+```python
+from app.formatters import format_datetime_short
+
+formatted = format_datetime_short("2024-12-05T14:30:00Z")
+# Returns: "5 December at 2:30pm"
+```
+
+#### format_datetime_relative
+
+Combines relative date and time.
+
+```python
+from app.formatters import format_datetime_relative
+
+formatted = format_datetime_relative("2024-12-05T14:30:00Z")
+# Returns: "today at 2:30pm" (if current date is 2024-12-05)
+# Returns: "yesterday at 2:30pm" (if current date is 2024-12-06)
+```
+
+#### format_datetime_numeric
+
+Combines numeric date and 24-hour time.
+
+```python
+from app.formatters import format_datetime_numeric
+
+formatted = format_datetime_numeric("2024-12-05T14:30:00Z")
+# Returns: "2024-12-05 14:30"
+```
+
+#### format_datetime_human
+
+Formats datetime with customizable relative date.
+
+```python
+from app.formatters import format_datetime_human
+
+formatted = format_datetime_human(
+    "2024-12-05T14:30:00Z",
+    date_prefix="on",
+    separator="at"
+)
+# Returns: "on today at 2:30pm"
+# Returns: "on 5 December at 2:30pm" (for other dates)
+```
+
+**Parameters:**
+- `date` (str): UTC datetime string
+- `date_prefix` (str): Prefix for non-relative dates (default: "on")
+- `separator` (str): Word between date and time (default: "at")
+
+### Day of Week
+
+#### format_day_of_week
+
+Returns the day name.
+
+```python
+from app.formatters import format_day_of_week
+
+day = format_day_of_week("2024-12-25T09:00:00Z")
+# Returns: "Wednesday"
+```
+
+### Relative Time
+
+#### format_delta
+
+Formats time elapsed since a date.
+
+```python
+from app.formatters import format_delta
+
+formatted = format_delta("2024-12-05T14:29:45Z")
+# Returns: "just now" (if < 30 seconds ago)
+# Returns: "in the last minute" (if < 60 seconds ago)
+# Returns: "1 minute ago" (if 1-2 minutes ago)
+# Returns: "5 minutes ago" (if 5 minutes ago)
+```
+
+**Logic:**
+- < 30 seconds: "just now"
+- < 60 seconds: "in the last minute"
+- Otherwise: humanized time ("1 minute ago", "2 hours ago", etc.)
+
+#### format_delta_days
+
+Formats days elapsed since a date.
+
+```python
+from app.formatters import format_delta_days
+
+formatted = format_delta_days("2024-12-05T14:30:00Z")
+# Returns: "today" (if same day)
+# Returns: "yesterday" (if previous day)
+# Returns: "2 days ago" (otherwise)
+
+formatted = format_delta_days("2024-12-05T14:30:00Z", numeric_prefix="")
+# Returns: "2 days ago"
+```
+
+**Parameters:**
+- `date` (str): UTC datetime string
+- `numeric_prefix` (str): Prefix for numeric output (default: "")
+
+## Notification Formatters
+
+### Notification Types
+
+#### format_notification_type
+
+Formats notification type for display.
+
+```python
+from app.formatters import format_notification_type
+
+formatted = format_notification_type("email")
+# Returns: "Email"
+
+formatted = format_notification_type("sms")
+# Returns: "Text message"
+
+formatted = format_notification_type("letter")
+# Returns: "Letter"
+```
+
+**Parameters:**
+- `notification_type` (str): "email", "sms", or "letter"
+
+**Returns:** `str` - Display name
+
+### Notification Status
+
+#### format_notification_status
+
+Formats notification status for display based on type.
+
+```python
+from app.formatters import format_notification_status
+
+# Email statuses
+status = format_notification_status("delivered", "email")
+# Returns: "Delivered"
+
+status = format_notification_status("permanent-failure", "email")
+# Returns: "Email address does not exist"
+
+# SMS statuses
+status = format_notification_status("sent", "sms")
+# Returns: "Sent to an international number"
+
+# Letter statuses
+status = format_notification_status("virus-scan-failed", "letter")
+# Returns: "Virus detected"
+```
+
+**Parameters:**
+- `status` (str): Notification status code
+- `template_type` (str): "email", "sms", or "letter"
+
+**Returns:** `str` - Human-readable status
+
+**Common Email Statuses:**
+- `delivered` → "Delivered"
+- `permanent-failure` → "Email address does not exist"
+- `temporary-failure` → "Inbox not accepting messages right now"
+- `technical-failure` → "Technical failure"
+- `sending` / `created` → "Delivering"
+
+**Common SMS Statuses:**
+- `delivered` → "Delivered"
+- `sent` → "Sent to an international number"
+- `permanent-failure` → "Not delivered"
+- `temporary-failure` → "Phone not accepting messages right now"
+- `validation-failed` → "Validation failed"
+
+**Common Letter Statuses:**
+- `virus-scan-failed` → "Virus detected"
+- `permanent-failure` → "Permanent failure"
+- `technical-failure` → "Technical failure"
+- Most others → "" (empty string)
+
+#### format_notification_status_as_time
+
+Returns appropriate time for status display.
+
+```python
+from app.formatters import format_notification_status_as_time
+
+time = format_notification_status_as_time(
+    status="sending",
+    created="2024-12-05 14:00:00",
+    updated="2024-12-05 14:05:00"
+)
+# Returns: " since 2024-12-05 14:00:00"
+
+time = format_notification_status_as_time(
+    status="delivered",
+    created="2024-12-05 14:00:00",
+    updated="2024-12-05 14:05:00"
+)
+# Returns: "2024-12-05 14:05:00"
+```
+
+**Logic:**
+- For statuses "created", "pending", "sending": Returns created time with " since " prefix
+- For other statuses: Returns updated time
+
+#### format_notification_status_as_field_status
+
+Returns CSS class for status field styling.
+
+```python
+from app.formatters import format_notification_status_as_field_status
+
+field_status = format_notification_status_as_field_status("failed", "email")
+# Returns: "error"
+
+field_status = format_notification_status_as_field_status("delivered", "email")
+# Returns: None
+
+field_status = format_notification_status_as_field_status("sending", "sms")
+# Returns: "default"
+
+field_status = format_notification_status_as_field_status("sent", "sms")
+# Returns: "sent-international"
+```
+
+**Returns:** `str | None` - CSS class name or None
+
+**Values:**
+- `"error"` - For failures
+- `"default"` - For in-progress
+- `"sent-international"` - For SMS sent internationally
+- `None` - For successful/neutral statuses
+
+#### format_notification_status_as_url
+
+Returns guidance URL for failure statuses.
+
+```python
+from app.formatters import format_notification_status_as_url
+
+url = format_notification_status_as_url("permanent-failure", "email")
+# Returns: "/guidance/message-status/email"
+
+url = format_notification_status_as_url("delivered", "email")
+# Returns: None
+```
+
+**Returns:** `str | None` - URL to guidance page or None
+
+**Only returns URLs for:**
+- Email or SMS notification types
+- Failure statuses (technical-failure, temporary-failure, permanent-failure)
+
+## Currency Formatters
+
+### format_pounds_as_currency
+
+Formats pounds as currency.
+
+```python
+from app.formatters import format_pounds_as_currency
+
+formatted = format_pounds_as_currency(12.50)
+# Returns: "£12.50"
+
+formatted = format_pounds_as_currency(1234.56)
+# Returns: "£1,234.56"
+```
+
+**Parameters:**
+- `number` (float): Amount in pounds
+
+**Returns:** `str` - Formatted currency string
+
+### format_pennies_as_currency
+
+Formats pennies as currency with optional long format.
+
+```python
+from app.formatters import format_pennies_as_currency
+
+formatted = format_pennies_as_currency(1250, long=False)
+# Returns: "£12.50"
+
+formatted = format_pennies_as_currency(50, long=False)
+# Returns: "50p"
+
+formatted = format_pennies_as_currency(50, long=True)
+# Returns: "50 pence"
+
+formatted = format_pennies_as_currency(1.5, long=False)
+# Returns: "1.5p"
+```
+
+**Parameters:**
+- `pennies` (int | float): Amount in pennies
+- `long` (bool): Use long format for sub-pound amounts
+
+**Returns:** `str` - Formatted currency string
+
+**Logic:**
+- >= 100 pennies: Shows as pounds ("£1.23")
+- < 100 pennies + long=True: Shows as "X pence"
+- < 100 pennies + long=False: Shows as "Xp"
+
+## Number Formatters
+
+### format_thousands
+
+Formats numbers with thousand separators.
+
+```python
+from app.formatters import format_thousands
+
+formatted = format_thousands(1234567)
+# Returns: "1,234,567"
+
+formatted = format_thousands(None)
+# Returns: ""
+
+formatted = format_thousands("not a number")
+# Returns: "not a number"
+```
+
+**Parameters:**
+- `value` (Number | None | any): Value to format
+
+**Returns:** `str` - Formatted number or original value
+
+### format_billions
+
+Formats large numbers as words.
+
+```python
+from app.formatters import format_billions
+
+formatted = format_billions(1500000000)
+# Returns: "1.5 billion"
+
+formatted = format_billions(1500000)
+# Returns: "1.5 million"
+```
+
+**Parameters:**
+- `count` (int): Number to format
+
+**Returns:** `str` - Humanized large number
+
+## Text and String Formatters
+
+### nl2br
+
+Converts newlines to HTML line breaks.
+
+```python
+from app.formatters import nl2br
+
+formatted = nl2br("Line 1\nLine 2\nLine 3")
+# Returns: Markup("Line 1<br>Line 2<br>Line 3")
+
+formatted = nl2br(None)
+# Returns: ""
+```
+
+**Parameters:**
+- `value` (str | None): Text with newlines
+
+**Returns:** `Markup | str` - HTML with `<br>` tags or empty string
+
+**Note:** Escapes HTML in input text for security
+
+### sentence_case
+
+Converts text to sentence case (first letter capitalized).
+
+```python
+from app.formatters import sentence_case
+
+formatted = sentence_case("hello world")
+# Returns: "Hello world"
+
+formatted = sentence_case("HELLO WORLD")
+# Returns: "Hello WORLD"
+```
+
+**Parameters:**
+- `sentence` (str): Text to convert
+
+**Returns:** `str` - Sentence with first word capitalized
+
+**Logic:** Only capitalizes first word, leaves rest unchanged
+
+### insert_wbr
+
+Inserts word break opportunities after commas.
+
+```python
+from app.formatters import insert_wbr
+
+formatted = insert_wbr("1,234,567")
+# Returns: Markup("1,<wbr />234,<wbr />567")
+```
+
+**Parameters:**
+- `string` (str): String with commas
+
+**Returns:** `Markup` - HTML with word break hints
+
+**Use Case:** Prevents long numbers from breaking layout
+
+## Message Count Formatters
+
+### message_count
+
+Formats message count with appropriate noun.
+
+```python
+from app.formatters import message_count
+
+formatted = message_count(1, "email")
+# Returns: "1 email"
+
+formatted = message_count(5, "sms")
+# Returns: "5 text messages"
+
+formatted = message_count(1000, "letter")
+# Returns: "1,000 letters"
+```
+
+**Parameters:**
+- `count` (int): Number of messages
+- `message_type` (str): "email", "sms", "letter", "international_sms", or other
+
+**Returns:** `str` - Formatted count with plural noun
+
+### message_count_label
+
+Formats message count with optional suffix.
+
+```python
+from app.formatters import message_count_label
+
+formatted = message_count_label(5, "email", suffix="sent")
+# Returns: "5 emails sent"
+
+formatted = message_count_label(1, "sms", suffix="remaining")
+# Returns: "1 text message remaining"
+
+formatted = message_count_label(10, "letter", suffix="")
+# Returns: "10 letters"
+```
+
+**Parameters:**
+- `count` (int): Number of messages
+- `message_type` (str): Message type
+- `suffix` (str): Suffix text (default: "sent")
+
+### message_count_noun
+
+Returns appropriate noun for message count (used by message_count).
+
+```python
+from app.formatters import message_count_noun
+
+noun = message_count_noun(1, "email")
+# Returns: "email"
+
+noun = message_count_noun(5, "sms")
+# Returns: "text messages"
+```
+
+## Recipient Count Formatters
+
+### recipient_count
+
+Formats recipient count with appropriate noun.
+
+```python
+from app.formatters import recipient_count
+
+formatted = recipient_count(1, "email")
+# Returns: "1 email address"
+
+formatted = recipient_count(100, "sms")
+# Returns: "100 phone numbers"
+```
+
+**Parameters:**
+- `count` (int): Number of recipients
+- `template_type` (str): Template type
+
+**Returns:** `str` - Formatted count with plural noun
+
+### recipient_count_label
+
+Returns appropriate label for recipient count.
+
+```python
+from app.formatters import recipient_count_label
+
+label = recipient_count_label(1, "email")
+# Returns: "email address"
+
+label = recipient_count_label(5, "sms")
+# Returns: "phone numbers"
+
+label = recipient_count_label(10, "letter")
+# Returns: "addresses"
+```
+
+## Other Formatters
+
+### iteration_count
+
+Formats iteration count as words.
+
+```python
+from app.formatters import iteration_count
+
+formatted = iteration_count(1)
+# Returns: "once"
+
+formatted = iteration_count(2)
+# Returns: "twice"
+
+formatted = iteration_count(5)
+# Returns: "5 times"
+```
+
+### character_count
+
+Formats character count.
+
+```python
+from app.formatters import character_count
+
+formatted = character_count(1)
+# Returns: "1 character"
+
+formatted = character_count(1234)
+# Returns: "1,234 characters"
+```
+
+### format_pluralise
+
+Returns "s" for plural file lists.
+
+```python
+from app.formatters import format_pluralise
+
+plural = format_pluralise(["file1.csv"])
+# Returns: ""
+
+plural = format_pluralise(["file1.csv", "file2.csv"])
+# Returns: "s"
+```
+
+### format_yes_no
+
+Formats boolean as Yes/No text.
+
+```python
+from app.formatters import format_yes_no
+
+formatted = format_yes_no(True)
+# Returns: "Yes"
+
+formatted = format_yes_no(False)
+# Returns: "No"
+
+formatted = format_yes_no(None)
+# Returns: "No"
+
+formatted = format_yes_no(True, yes="Enabled", no="Disabled")
+# Returns: "Enabled"
+```
+
+**Parameters:**
+- `value` (bool | None): Value to format
+- `yes` (str): Text for True (default: "Yes")
+- `no` (str): Text for False (default: "No")
+- `none` (str): Text for None (default: "No")
+
+### format_auth_type
+
+Formats authentication type for display.
+
+```python
+from app.formatters import format_auth_type
+
+formatted = format_auth_type("email_auth")
+# Returns: "Email link"
+
+formatted = format_auth_type("sms_auth", with_indefinite_article=True)
+# Returns: "a text message code"
+
+formatted = format_auth_type("webauthn_auth", with_indefinite_article=True)
+# Returns: "a security key"
+```
+
+**Parameters:**
+- `auth_type` (str): "email_auth", "sms_auth", or "webauthn_auth"
+- `with_indefinite_article` (bool): Include "a" or "an" prefix
+
+### Phone Number Formatters
+
+#### valid_phone_number
+
+Validates a phone number.
+
+```python
+from app.formatters import valid_phone_number
+
+is_valid = valid_phone_number("07700900000")
+# Returns: True
+
+is_valid = valid_phone_number("invalid")
+# Returns: False
+```
+
+#### format_phone_number_human_readable
+
+Formats phone number for display.
+
+```python
+from app.formatters import format_phone_number_human_readable
+
+formatted = format_phone_number_human_readable("07700900000")
+# Returns: "07700 900000"
+
+formatted = format_phone_number_human_readable("+447700900000")
+# Returns: "+44 7700 900000"
+
+formatted = format_phone_number_human_readable("invalid")
+# Returns: "invalid" (returns input if invalid)
+```
+
+#### redact_mobile_number
+
+Redacts middle digits of mobile number.
+
+```python
+from app.formatters import redact_mobile_number
+
+redacted = redact_mobile_number("07700900000")
+# Returns: "077009••••0"
+
+redacted = redact_mobile_number("07700900000", spacing=" ")
+# Returns: "077009 • • • • 0"
+```
+
+**Parameters:**
+- `mobile_number` (str): Phone number
+- `spacing` (str): Spacing around redaction character (default: "")
+
+**Logic:** Redacts 4th, 5th, 6th, and 7th digits from the end
+
+### format_provider
+
+Formats SMS provider name.
+
+```python
+from app.formatters import format_provider
+
+formatted = format_provider("firetext")
+# Returns: "Firetext"
+
+formatted = format_provider("mmg")
+# Returns: "MMG"
+```
+
+**Logic:**
+- "firetext" → Title case
+- Others → Uppercase
+
+### Email Utilities
+
+#### guess_name_from_email_address
+
+Extracts and formats a name from an email address.
+
+```python
+from app.formatters import guess_name_from_email_address
+
+name = guess_name_from_email_address("john.smith@example.gov.uk")
+# Returns: "John Smith"
+
+name = guess_name_from_email_address("j.smith@example.gov.uk")
+# Returns: "" (initial detected, too short)
+
+name = guess_name_from_email_address("johnsmith@example.gov.uk")
+# Returns: "" (no dot separator)
+```
+
+**Logic:**
+1. Extracts part before @ and +
+2. Returns empty if no dot or starts with initial
+3. Replaces dots with spaces
+4. Removes digits and middle initials
+5. Converts to title case
+6. Normalizes spaces
+
+#### extract_path_from_url
+
+Extracts path from full URL.
+
+```python
+from app.formatters import extract_path_from_url
+
+path = extract_path_from_url("https://example.gov.uk/path/to/page?query=value")
+# Returns: "/path/to/page?query=value"
+```
+
+### Data Retention
+
+#### get_time_left
+
+Calculates time remaining for data retention.
+
+```python
+from app.formatters import get_time_left
+from datetime import datetime, UTC
+
+created = datetime.now(UTC)
+time_left = get_time_left(created, service_data_retention_days=7)
+# Returns: "Data available for 6 days"
+```
+
+**Parameters:**
+- `created_at` (datetime | str): Creation datetime
+- `service_data_retention_days` (int): Retention period (default: 7)
+
+**Returns:** `str` - Human-readable time remaining
+
+#### message_finished_processing_notification
+
+Returns appropriate message for finished processing.
+
+```python
+from app.formatters import message_finished_processing_notification
+
+message = message_finished_processing_notification(
+    processing_started="2024-12-05T09:00:00Z",
+    data_retention_period=7
+)
+# Returns: "No messages to show" (if within retention)
+# Returns: "These messages have been deleted because they were sent more than 7 days ago" (if outside)
+```
+
+### Boolean Conversion
+
+#### convert_to_boolean
+
+Converts string to boolean.
+
+```python
+from app.formatters import convert_to_boolean
+
+result = convert_to_boolean("true")
+# Returns: True
+
+result = convert_to_boolean("false")
+# Returns: False
+
+result = convert_to_boolean("yes")
+# Returns: True
+
+result = convert_to_boolean("other")
+# Returns: "other" (unchanged)
+```
+
+**True values:** "t", "true", "on", "yes", "1" (case-insensitive)
+
+**False values:** "f", "false", "off", "no", "0" (case-insensitive)

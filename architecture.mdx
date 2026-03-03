@@ -1,0 +1,479 @@
+---
+title: Architecture overview
+description: Understanding the technical architecture of GOV.UK Notify Admin
+---
+
+## System overview
+
+GOV.UK Notify Admin is the frontend administration interface for the GOV.UK Notify platform. Built with Flask and Python, it provides a secure web application for managing notification services, users, templates, and batch sending operations.
+
+<img
+  className="block dark:hidden"
+  src="/images/architecture-diagram.svg"
+  alt="GOV.UK Notify Admin Architecture"
+/>
+
+## Core components
+
+The platform is architected as a modern Python web application with clear separation of concerns:
+
+### Application layer
+
+**Flask web framework**
+- Python 3.13 runtime environment
+- Flask application factory pattern for flexible initialization
+- Three blueprint architecture for request handling:
+  - `main_blueprint` - Primary application routes
+  - `json_updates_blueprint` - AJAX endpoints for real-time updates
+  - `status_blueprint` - Health check and status endpoints
+  - `no_cookie_blueprint` - Cookie-free routes for embedded content
+
+**Session management**
+- Custom `NotifyAdminSessionInterface` for secure session handling
+- 20-hour permanent session lifetime for standard users
+- 30-minute inactive timeout for platform administrators
+- Redis-backed session storage with configurable TTL
+- Session refresh disabled by default except for specific endpoints
+
+**Authentication and authorization**
+- Flask-Login for user session management
+- Multi-factor authentication with three methods:
+  - Email 2FA (30-minute code expiry)
+  - SMS 2FA via user mobile number
+  - WebAuthn support for hardware keys and biometrics
+- Custom `AnonymousUser` class for unauthenticated contexts
+- Permission-based access control with decorators:
+  - `@user_has_permissions()` - Checks user service permissions
+  - `@user_is_platform_admin` - Restricts to platform administrators
+  - `@service_has_permission()` - Validates service capabilities
+
+### Data layer
+
+**API clients**
+
+The admin application communicates with backend services via RESTful API clients:
+
+- `service_api_client` - Service CRUD and configuration
+- `user_api_client` - User management and authentication
+- `template_folder_api_client` - Template organization
+- `notification_api_client` - Notification sending and tracking
+- `job_api_client` - Batch job management
+- `billing_api_client` - Usage tracking and cost calculation
+- `organisations_client` - Organization management
+- `invite_api_client` - User invitation workflow
+- `api_key_api_client` - API key generation and management
+- `template_statistics_client` - Analytics and reporting
+- `events_api_client` - Audit logging
+
+All API communication uses:
+- Bearer token authentication via `ADMIN_CLIENT_SECRET`
+- Automatic retry logic for transient failures
+- Request/response logging for debugging
+- Error handling with `HTTPError` exceptions
+
+**Caching layer**
+
+Redis provides high-performance caching:
+- Session storage with automatic expiry
+- Search query caching (7-day TTL for notification searches)
+- Memo resetters for cache invalidation
+- Optional Redis usage controlled by `REDIS_ENABLED` flag
+- Local development fallback when Redis unavailable
+
+### Storage layer
+
+**Amazon S3 buckets**
+
+Multiple S3 buckets handle different file types:
+
+- `S3_BUCKET_CSV_UPLOAD` - Batch upload CSV files with metadata
+- `S3_BUCKET_CONTACT_LIST_UPLOAD` - Reusable contact lists
+- `S3_BUCKET_LOGO_UPLOAD` - Email and letter branding logos
+- `S3_BUCKET_TRANSIENT_UPLOADED_LETTERS` - Temporary letter PDFs
+- `S3_BUCKET_PRECOMPILED_ORIGINALS_BACKUP_LETTERS` - Letter backups
+- `S3_BUCKET_LETTER_ATTACHMENTS` - Letter attachment files
+- `S3_BUCKET_TEMPLATE_EMAIL_FILES` - Email template attachments
+- `S3_BUCKET_REPORT_REQUESTS_DOWNLOAD` - Generated CSV reports
+- `S3_BUCKET_MOU` - Memorandum of Understanding documents
+
+**CDN delivery**
+- Logo files served via `LOGO_CDN_DOMAIN` for performance
+- Static assets served from `ASSET_DOMAIN` with fingerprinting
+- DNS prefetch and preconnect headers for optimized loading
+
+### External integrations
+
+**Template preview service**
+- `TEMPLATE_PREVIEW_API_HOST` - Renders email and letter previews
+- Generates PNG previews for letters
+- PDF page counting for postage calculation
+- Real-time template rendering with test data
+
+**Antivirus scanning**
+- `ANTIVIRUS_API_HOST` - Scans uploaded files for malware
+- Validates CSV uploads and letter PDFs
+- Blocks malicious content before processing
+- Optional in development, required in production
+
+**Zendesk integration**
+- `ZENDESK_API_KEY` - Support ticket creation
+- Feedback form submission to Zendesk
+- Automatic ticket categorization with subject prefixes
+
+## Request lifecycle
+
+Understanding how requests flow through the system:
+
+<Steps>
+  <Step title="Request initiation">
+    User navigates to a route, triggering Flask's routing system:
+    ```python
+    @main.route("/services/<uuid:service_id>")
+    @user_has_permissions()
+    def service_dashboard(service_id):
+        # Route handler
+    ```
+
+    Custom URL converters handle specialized types:
+    - `uuid` - Service and organization IDs (auto-lowercased)
+    - `template_type` - Email, SMS, or letter validation
+    - `agreement_type` - MOU agreement types
+    - `base64_uuid` - Encoded identifiers
+  </Step>
+
+  <Step title="Before request hooks">
+    Multiple hooks execute before the view function:
+
+    1. `make_nonce_before_request()` - Generates CSP nonce for inline scripts
+    2. `load_user_id_before_request()` - Extracts user ID from session
+    3. `load_service_before_request()` - Loads `current_service` from URL or session
+    4. `load_organisation_before_request()` - Loads `current_organisation` from URL
+    5. `record_start_time()` - Timestamps request for metrics
+
+    These populate Flask's `g` object with request-scoped data:
+    ```python
+    g.current_service  # Service from URL parameter or session
+    g.current_organisation  # Organization from URL parameter
+    g.user_id  # Authenticated user ID
+    g.start  # Request start time for metrics
+    ```
+  </Step>
+
+  <Step title="Authentication check">
+    Flask-Login verifies user authentication:
+    - Checks session for `user_id`
+    - Loads `User` object via `load_user()` callback
+    - Sets `current_user` proxy for template access
+    - Redirects to sign-in if unauthenticated and required
+  </Step>
+
+  <Step title="Permission validation">
+    View decorators verify user permissions:
+    ```python
+    @user_has_permissions('send_messages', 'manage_templates')
+    def send_notification(service_id):
+        # User must have send_messages OR manage_templates
+    ```
+
+    Permission types include:
+    - `manage_users` - Invite and manage team members
+    - `manage_templates` - Create and edit templates
+    - `manage_settings` - Configure service settings
+    - `send_messages` - Send notifications
+    - `manage_api_keys` - Generate API keys
+    - `view_activity` - Access dashboard and reports
+  </Step>
+
+  <Step title="View execution">
+    The route handler processes the request:
+    - Fetches data from API clients
+    - Processes form submissions
+    - Performs business logic
+    - Returns template rendering or redirect
+
+    Example dashboard view:
+    ```python
+    def service_dashboard(service_id):
+        return render_template(
+            'views/dashboard/dashboard.html',
+            updates_url=url_for('json_updates.service_dashboard_updates'),
+            partials=get_dashboard_partials_lazy()
+        )
+    ```
+  </Step>
+
+  <Step title="Response processing">
+    After request hooks apply security headers:
+    - `X-Content-Type-Options: nosniff`
+    - `X-Frame-Options: SAMEORIGIN`
+    - `Content-Security-Policy` with nonce-based inline script allowance
+    - `Strict-Transport-Security` with 1-year max-age
+    - `Cache-Control: no-store` for sensitive data
+    - Custom `Server` header for obfuscation
+  </Step>
+</Steps>
+
+## Security architecture
+
+Multiple layers protect user data and prevent attacks:
+
+### Transport security
+
+- HTTPS enforced in production via `HTTP_PROTOCOL` and `SESSION_COOKIE_SECURE`
+- HSTS headers with `includeSubDomains` and `preload` directives
+- TLS certificate validation for API calls
+
+### Application security
+
+**CSRF protection**
+- Flask-WTF CSRF tokens on all forms
+- Automatic validation on POST requests
+- No time limit on CSRF tokens (`WTF_CSRF_TIME_LIMIT = None`)
+- Session-tied tokens prevent reuse across sessions
+
+**Content Security Policy**
+```python
+Content-Security-Policy:
+  default-src 'self' {asset_domain} 'unsafe-inline';
+  script-src 'self' {asset_domain} 'nonce-{csp_nonce}';
+  connect-src 'self' {asset_domain};
+  object-src 'self';
+  font-src 'self' {asset_domain} data:;
+  img-src 'self' {asset_domain} *.notifications.service.gov.uk {logo_domain} data:;
+  frame-ancestors 'self';
+```
+
+Nonce-based CSP allows specific inline scripts while blocking XSS:
+```python
+request.csp_nonce = secrets.token_urlsafe(16)
+```
+
+**Input validation**
+- WTForms for declarative form validation
+- Email address format validation
+- UK phone number validation with international support
+- Postal address validation for letters
+- File upload validation (size, type, content)
+- CSV structure validation with error reporting
+
+### Session security
+
+- Secure cookie flags (`httponly`, `secure`, `samesite=Lax`)
+- Session data stored server-side in Redis
+- Session IDs never exposed in URLs
+- Automatic session expiry based on inactivity
+- Platform admin sessions expire faster (30 minutes)
+
+### File upload security
+
+- Antivirus scanning before processing
+- File type validation (CSV, PDF, PNG, JPG)
+- File size limits enforced
+- S3 bucket access restricted via IAM
+- Temporary file cleanup after processing
+
+## Performance optimizations
+
+### Frontend performance
+
+**Asset management**
+- Asset fingerprinting for cache busting
+- CDN delivery for static files and logos
+- Rollup for JavaScript bundling
+- CSS and JavaScript minification
+- Font subsetting with WOFF2 compression
+- DNS prefetch and preconnect for external resources
+
+**Progressive enhancement**
+- Server-side rendering for initial page load
+- AJAX updates for dynamic content (dashboard statistics, notification lists)
+- Lazy loading for dashboard partials
+- JSON update endpoints for polling:
+  ```python
+  @json_updates.route("/services/<uuid:service_id>/dashboard.json")
+  def service_dashboard_updates(service_id):
+      return jsonify(**get_dashboard_partials())
+  ```
+
+### Backend performance
+
+**Caching strategies**
+- Redis caching for search queries (7-day TTL)
+- Memoization for expensive computations
+- Service and organization data cached in `g` object per request
+- Asset fingerprint caching across requests
+
+**Database optimization**
+- Pagination for large result sets (50 notifications per page)
+- Lazy loading of related objects
+- Efficient filtering at API level
+- Aggregated statistics instead of individual queries
+
+**Concurrent processing**
+- Eventlet for async I/O in production
+- Parallel API calls where possible
+- Background job processing for batch operations
+- Non-blocking file uploads to S3
+
+## Deployment architecture
+
+### Environment configuration
+
+Three environment tiers with distinct configurations:
+
+**Development**
+```python
+class Development(Config):
+    DEBUG = True
+    SESSION_COOKIE_SECURE = False
+    ANTIVIRUS_ENABLED = False
+    REDIS_ENABLED = False
+```
+
+**Sandbox**
+```python
+class Sandbox(CloudFoundryConfig):
+    HTTP_PROTOCOL = "https"
+    HEADER_COLOUR = "#F499BE"  # Pink header for visual distinction
+```
+
+**Production**
+```python
+class Config:
+    DEBUG = False
+    SESSION_COOKIE_SECURE = True
+    ANTIVIRUS_ENABLED = True
+    REDIS_ENABLED = True
+```
+
+### Logging and monitoring
+
+**Request logging**
+- GDS Metrics integration for performance tracking
+- Request start time recording via `g.start`
+- Error logging with structured context
+- API call logging with URL and status code
+
+**Error handling**
+Comprehensive error handlers for different scenarios:
+- `400` - Client errors logged as exceptions
+- `401/403` - Authentication/authorization failures
+- `404` - Not found with service-specific templates
+- `410` - Gone resources
+- `500` - Internal errors with stack traces in debug mode
+- `504` - Eventlet timeout handling
+- `HTTPError` - API client errors with response details
+- `CSRFError` - CSRF validation failures with session checks
+
+**Health checks**
+- Status blueprint for uptime monitoring
+- Unauthenticated, unstyled, no-cookie status page
+- Integration with platform health checks
+
+## Data models
+
+Key domain models mirror API responses:
+
+**Service model**
+```python
+class Service(JSONModel):
+    id: UUID
+    name: str
+    active: bool
+    trial_mode: bool  # Alias for 'restricted'
+    permissions: List[str]  # email, sms, letter, etc.
+    message_limit: int
+    rate_limit: int
+    organisation: Organisation
+    email_branding: EmailBranding
+    letter_branding: LetterBranding
+```
+
+**User model**
+```python
+class User(JSONModel):
+    id: UUID
+    email_address: str
+    mobile_number: str
+    auth_type: str  # email_auth, sms_auth, webauthn_auth
+    permissions: Dict[str, List[str]]  # Service ID -> permissions
+    platform_admin: bool
+    organisations: List[Organisation]
+    services: List[Service]
+```
+
+**Notification model**
+```python
+class Notification(JSONModel):
+    id: UUID
+    template_id: UUID
+    template_version: int
+    created_at: datetime
+    status: str  # sending, delivered, failed, etc.
+    notification_type: str  # email, sms, letter
+    recipient: str  # Redacted in UI
+    personalisation: Dict[str, str]
+```
+
+## Development workflow
+
+### Local setup
+
+```bash
+# Install dependencies
+make bootstrap
+
+# Run development server
+make run-flask  # Starts on localhost:6012
+
+# Watch frontend assets
+make watch-frontend
+
+# Run tests
+make test
+npx jest  # JavaScript tests
+```
+
+### Project structure
+
+```
+app/
+├── __init__.py          # Application factory
+├── config.py            # Environment configurations
+├── main/                # Main blueprint
+│   ├── views/           # Route handlers
+│   │   ├── dashboard.py
+│   │   ├── templates.py
+│   │   ├── send.py
+│   │   └── ...
+│   ├── forms.py         # WTForms definitions
+│   └── validators.py    # Custom validators
+├── models/              # Domain models
+│   ├── service.py
+│   ├── user.py
+│   ├── organisation.py
+│   └── ...
+├── notify_client/       # API clients
+├── templates/           # Jinja2 templates
+├── static/              # CSS, JS, images
+└── navigation.py        # Navigation menus
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Getting started"
+    icon="rocket"
+    href="/getting-started"
+  >
+    Set up your first service and send notifications
+  </Card>
+  <Card
+    title="API reference"
+    icon="code"
+    href="/api-reference/introduction"
+  >
+    Integrate with the GOV.UK Notify API
+  </Card>
+</CardGroup>

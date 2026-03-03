@@ -1,0 +1,472 @@
+---
+title: API Clients
+description: API client architecture and backend integration in GOV.UK Notify Admin
+---
+
+GOV.UK Notify Admin communicates with the Notify API through a set of specialized API client classes. These clients handle authentication, caching, and provide a clean interface for backend operations.
+
+## Client Architecture
+
+All API clients inherit from `NotifyAdminAPIClient`, which extends the `notifications-python-client` base class.
+
+### Base Client
+
+**File**: `app/notify_client/__init__.py`
+
+```python
+from notifications_python_client.base import BaseAPIClient
+from flask import g, has_request_context, request
+
+class NotifyAdminAPIClient(BaseAPIClient):
+    def __init__(self, app):
+        base_url = app.config["API_HOST_NAME"]
+        super().__init__("x" * 100, base_url=base_url)
+        
+        self.service_id = app.config["ADMIN_CLIENT_USER_NAME"]
+        self.api_key = app.config["ADMIN_CLIENT_SECRET"]
+    
+    def generate_headers(self, api_token):
+        headers = {
+            "Content-type": "application/json",
+            "Authorization": f"Bearer {api_token}",
+            "User-agent": f"NOTIFY-API-PYTHON-CLIENT/{__version__}",
+        }
+        
+        if has_request_context():
+            # Add request tracing headers
+            if hasattr(request, "get_onwards_request_headers"):
+                headers.update(request.get_onwards_request_headers())
+            
+            # Add current user ID for audit
+            if g.user_id:
+                headers["X-Notify-User-Id"] = g.user_id
+        
+        return headers
+```
+
+**Features**:
+- Automatic authentication header generation
+- Request tracing for debugging
+- User ID tracking for audit logs
+- Shared configuration across all clients
+
+### Request Caching
+
+**File**: `app/notify_client/__init__.py`
+
+```python
+from notifications_utils.clients.redis import RequestCache
+from app.extensions import redis_client
+
+cache = RequestCache(redis_client)
+```
+
+The cache decorator provides:
+- `@cache.set(key_pattern)` - Cache GET responses
+- `@cache.delete(key_pattern)` - Invalidate on updates
+- Automatic key formatting with parameters
+
+## API Clients
+
+The application includes **30 API client modules**:
+
+### Service API Client
+
+**File**: `app/notify_client/service_api_client.py`
+
+Manages service operations.
+
+```python
+class ServiceAPIClient(NotifyAdminAPIClient):
+    def __init__(self, app):
+        super().__init__(app)
+        self.admin_url = app.config["ADMIN_BASE_URL"]
+    
+    @cache.delete("user-{user_id}")
+    def create_service(
+        self,
+        service_name,
+        organisation_type,
+        email_message_limit,
+        international_sms_message_limit,
+        sms_message_limit,
+        letter_message_limit,
+        restricted,
+        user_id,
+    ):
+        data = {
+            "name": service_name,
+            "organisation_type": organisation_type,
+            "active": True,
+            "email_message_limit": email_message_limit,
+            "international_sms_message_limit": international_sms_message_limit,
+            "sms_message_limit": sms_message_limit,
+            "letter_message_limit": letter_message_limit,
+            "user_id": user_id,
+            "restricted": restricted,
+        }
+        data = _attach_current_user(data)
+        return self.post("/service", data)["data"]["id"]
+    
+    @cache.set("service-{service_id}")
+    def get_service(self, service_id):
+        return self.get(f"/service/{service_id}")
+    
+    def get_service_statistics(self, service_id, limit_days=None):
+        return self.get(
+            f"/service/{service_id}/statistics",
+            params={"limit_days": limit_days}
+        )["data"]
+    
+    @cache.delete("service-{service_id}")
+    def update_service(self, service_id, **kwargs):
+        data = _attach_current_user(kwargs)
+        
+        # Validate allowed attributes
+        disallowed = set(data.keys()) - {
+            "active", "billing_contact_email_addresses",
+            "name", "permissions", "rate_limit", # ... etc
+        }
+        if disallowed:
+            raise TypeError(f"Not allowed to update: {disallowed}")
+        
+        return self.post(f"/service/{service_id}", data)
+```
+
+**Key Methods**:
+- `create_service()` - Create new service
+- `get_service()` - Fetch service (cached)
+- `update_service()` - Update service settings
+- `get_service_statistics()` - Get usage stats
+- `find_services_by_name()` - Search services
+- `update_status()` - Change service active status
+
+### User API Client
+
+**File**: `app/notify_client/user_api_client.py`
+
+Manages user operations.
+
+```python
+class UserApiClient(NotifyAdminAPIClient):
+    def register_user(self, name, email_address, mobile_number, password, auth_type):
+        data = {
+            "name": name,
+            "email_address": email_address,
+            "mobile_number": mobile_number,
+            "password": password,
+            "auth_type": auth_type,
+        }
+        return self.post("/user", data)["data"]
+    
+    def get_user(self, user_id):
+        return self._get_user(user_id)["data"]
+    
+    @cache.set("user-{user_id}")
+    def _get_user(self, user_id):
+        return self.get(f"/user/{user_id}")
+    
+    def get_user_by_email(self, email_address):
+        return self.post("/user/email", data={"email": email_address})["data"]
+    
+    def get_user_by_email_or_none(self, email_address):
+        try:
+            return self.get_user_by_email(email_address)
+        except HTTPError as e:
+            if e.status_code == 404:
+                return None
+            raise
+    
+    @cache.delete("user-{user_id}")
+    def update_user_attribute(self, user_id, **kwargs):
+        # Validate allowed attributes
+        disallowed = set(kwargs.keys()) - ALLOWED_ATTRIBUTES
+        if disallowed:
+            raise TypeError(f"Not allowed to update: {disallowed}")
+        
+        return self.post(f"/user/{user_id}", data=kwargs)["data"]
+    
+    @cache.delete("user-{user_id}")
+    def verify_password(self, user_id, password):
+        try:
+            self.post(f"/user/{user_id}/verify/password", data={"password": password})
+            return True
+        except HTTPError:
+            return False
+```
+
+**Allowed Update Attributes**:
+```python
+ALLOWED_ATTRIBUTES = {
+    "name",
+    "email_address",
+    "mobile_number",
+    "auth_type",
+    "updated_by",
+    "current_session_id",
+    "email_access_validated_at",
+    "take_part_in_research",
+    "receives_new_features_email",
+    "platform_admin",
+}
+```
+
+### Organisation API Client
+
+**File**: `app/notify_client/organisations_api_client.py`
+
+Manages organisation operations:
+- `get_organisation(org_id)`
+- `get_organisation_by_domain(domain)`
+- `get_service_organisation(service_id)`
+- `create_organisation()`
+- `update_organisation()`
+- `archive_organisation()`
+
+### Notification API Client
+
+**File**: `app/notify_client/notification_api_client.py`
+
+Handles notification queries and operations:
+- `get_notification(service_id, notification_id)`
+- `get_notifications_for_service()`
+- `send_notification()` - Send single notification
+- `update_notification_to_cancelled()`
+
+### Job API Client
+
+**File**: `app/notify_client/job_api_client.py`
+
+Manages batch jobs:
+- `get_job(service_id, job_id)`
+- `get_jobs(service_id)`
+- `create_job()`
+- `cancel_job()`
+- `cancel_letter_job()`
+
+### Template Clients
+
+#### Template Folder API Client
+**File**: `app/notify_client/template_folder_api_client.py`
+
+- `create_template_folder()`
+- `get_template_folders()`
+- `update_template_folder()`
+- `delete_template_folder()`
+- `move_to_folder()`
+
+#### Template Statistics Client
+**File**: `app/notify_client/template_statistics_api_client.py`
+
+- `get_template_statistics_for_service()`
+- `get_monthly_template_usage()`
+
+#### Template Email File Client
+**File**: `app/notify_client/template_email_file_client.py`
+
+- `upload_email_attachment()`
+- `get_email_attachment()`
+
+### Branding Clients
+
+#### Email Branding Client
+**File**: `app/notify_client/email_branding_client.py`
+
+- `get_email_branding()`
+- `get_all_email_branding()`
+- `create_email_branding()`
+- `update_email_branding()`
+
+#### Letter Branding Client
+**File**: `app/notify_client/letter_branding_client.py`
+
+- `get_letter_branding()`
+- `get_all_letter_branding()`
+- `create_letter_branding()`
+- `update_letter_branding()`
+
+### API Key Client
+
+**File**: `app/notify_client/api_key_api_client.py`
+
+- `get_api_keys(service_id)`
+- `create_api_key()`
+- `revoke_api_key()`
+
+### Invite Clients
+
+#### Invite API Client
+**File**: `app/notify_client/invite_api_client.py`
+
+- `create_invite()`
+- `get_invites_for_service()`
+- `check_token()`
+- `accept_invite()`
+- `cancel_invited_user()`
+
+#### Org Invite API Client
+**File**: `app/notify_client/org_invite_api_client.py`
+
+- `create_invite()`
+- `get_invites_for_organisation()`
+- `check_token()`
+- `accept_invite()`
+
+### Other Specialized Clients
+
+- **Billing API Client** (`billing_api_client.py`) - Billing operations
+- **Complaint API Client** (`complaint_api_client.py`) - Email complaints
+- **Contact List API Client** (`contact_list_api_client.py`) - Saved contact lists
+- **Events API Client** (`events_api_client.py`) - Audit events
+- **Inbound Number Client** (`inbound_number_client.py`) - SMS receive numbers
+- **Letter Attachment Client** (`letter_attachment_client.py`) - Letter attachments
+- **Letter Jobs Client** (`letter_jobs_client.py`) - Letter job operations
+- **Letter Rate API Client** (`letter_rate_api_client.py`) - Postage rates
+- **Performance Dashboard Client** (`performance_dashboard_api_client.py`) - Platform metrics
+- **Platform Admin API Client** (`platform_admin_api_client.py`) - Admin operations
+- **Protected Sender ID Client** (`protected_sender_id_api_client.py`) - SMS sender IDs
+- **Provider Client** (`provider_client.py`) - SMS/email provider management
+- **Report Request Client** (`report_request_api_client.py`) - Data exports
+- **SMS Rate Client** (`sms_rate_client.py`) - SMS pricing
+- **Status API Client** (`status_api_client.py`) - API health checks
+- **Unsubscribe API Client** (`unsubscribe_api_client.py`) - Unsubscribe requests
+- **Upload API Client** (`upload_api_client.py`) - File uploads
+
+## Client Registration
+
+All clients are initialized and imported in `app/__init__.py`:
+
+```python
+from app.notify_client.service_api_client import service_api_client
+from app.notify_client.user_api_client import user_api_client
+from app.notify_client.organisations_api_client import organisations_client
+# ... 27 more clients
+```
+
+Clients are created as module-level singletons that are initialized when the app starts.
+
+## Usage Patterns
+
+### In Models
+
+Models use clients to fetch data:
+
+```python
+from app.notify_client.service_api_client import service_api_client
+
+class Service(JSONModel):
+    @classmethod
+    def from_id(cls, service_id):
+        return cls(service_api_client.get_service(service_id)["data"])
+```
+
+### In Views
+
+Views can use clients directly:
+
+```python
+from app import service_api_client, user_api_client
+
+@main.route("/services/<uuid:service_id>/users/<uuid:user_id>/remove", methods=["POST"])
+def remove_user_from_service(service_id, user_id):
+    service_api_client.remove_user_from_service(service_id, user_id)
+    flash("User removed from service")
+    return redirect(url_for(".manage_users", service_id=service_id))
+```
+
+### Audit Trail
+
+The `_attach_current_user` helper automatically adds the current user to create/update operations:
+
+```python
+def _attach_current_user(data):
+    return dict(created_by=current_user.id, **data)
+
+# Usage in client
+data = _attach_current_user({"name": "New Service"})
+# Result: {"created_by": "user-id-123", "name": "New Service"}
+```
+
+## Error Handling
+
+Clients raise `HTTPError` exceptions that are caught by global error handlers:
+
+```python
+from notifications_python_client.errors import HTTPError
+
+try:
+    service = service_api_client.get_service(service_id)
+except HTTPError as e:
+    if e.status_code == 404:
+        abort(404)
+    else:
+        raise
+```
+
+Global error handler in `app/__init__.py:register_errorhandlers()`:
+
+```python
+@application.errorhandler(HTTPError)
+def render_http_error(error):
+    application.logger.warning(
+        "API %(url)s failed with status %(status_code)s: %(error_message)s",
+        extra={
+            "url": error.response.url,
+            "status_code": error.status_code,
+            "error_message": error.message,
+        },
+    )
+    if error.status_code not in [401, 404, 403, 410]:
+        # Treat as 500
+        error_code = 500
+    return render_template(f"error/{error_code}.html"), error_code
+```
+
+## Caching Strategy
+
+### Cache Keys
+
+Cache keys use parameter formatting:
+
+```python
+@cache.set("service-{service_id}")
+def get_service(self, service_id):
+    return self.get(f"/service/{service_id}")
+
+# Creates cache key: "service-abc-123-def"
+```
+
+### Cache Invalidation
+
+Updates invalidate related caches:
+
+```python
+@cache.delete("service-{service_id}")
+@cache.delete("user-{user_id}")  # User's service list changed
+def create_service(self, ..., user_id):
+    # Both caches invalidated
+    pass
+```
+
+## Template Preview Client
+
+**File**: `app/template_previews.py`
+
+Special client for the template preview service (separate from main API):
+
+```python
+class TemplatePreview:
+    def __init__(self):
+        self.base_url = current_app.config["TEMPLATE_PREVIEW_API_HOST"]
+        self.api_key = current_app.config["TEMPLATE_PREVIEW_API_KEY"]
+    
+    def get_preview_for_templated_letter(self, db_template, filetype="png"):
+        # Generate letter preview image
+        pass
+```
+
+## Next Steps
+
+- [Models](/development/models) - Learn how models use API clients
+- [Flask Blueprints](/development/flask-blueprints) - See clients used in views
+- [Application Structure](/development/application-structure) - Understand overall architecture

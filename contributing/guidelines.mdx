@@ -1,0 +1,290 @@
+---
+title: Contribution Guidelines
+description: How to contribute to GOV.UK Notify Admin
+---
+
+## Overview
+
+GOV.UK Notify Admin is an open-source government project. We welcome contributions from the community while maintaining high standards for code quality, testing, and documentation.
+
+## Getting Started
+
+### Prerequisites
+
+- **Python 3.13** - The version used in production
+- **Node.js** - Install via Homebrew or use nvm for version management
+- **uv** - Python dependency management tool
+- **pre-commit** - For automated code quality checks
+
+### Initial Setup
+
+1. **Fork and clone the repository**
+   ```bash
+   git clone https://github.com/alphagov/notifications-admin.git
+   cd notifications-admin
+   ```
+
+2. **Create environment configuration**
+   
+   Create a file called `environment.sh` with the following content:
+   
+   ```bash
+   export NOTIFY_ENVIRONMENT='development'
+   export FLASK_APP=application.py
+   export FLASK_DEBUG=1
+   export WERKZEUG_DEBUG_PIN=off
+   ```
+
+3. **Install uv for dependency management**
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+4. **Install pre-commit hooks**
+   ```bash
+   brew install pre-commit  # or use pip
+   pre-commit install --install-hooks
+   ```
+
+5. **Bootstrap the project**
+   ```bash
+   make bootstrap
+   ```
+
+## Development Workflow
+
+### Creating a Feature Branch
+
+Always create a new branch for your work:
+
+```bash
+git checkout -b feature/your-feature-name
+# or
+git checkout -b fix/bug-description
+```
+
+Use descriptive branch names:
+- `feature/` - for new features
+- `fix/` - for bug fixes
+- `refactor/` - for code refactoring
+- `docs/` - for documentation updates
+
+### Making Changes
+
+1. **Run the development server**
+   ```bash
+   make run-flask
+   ```
+   The app will be available at [localhost:6012](http://localhost:6012).
+
+2. **Watch frontend changes**
+   
+   If working with JavaScript or CSS:
+   ```bash
+   make watch-frontend
+   ```
+
+3. **Write tests**
+   
+   All new features and bug fixes must include tests. See [Testing Strategy](/contributing/testing-strategy) for details.
+
+### Pre-commit Hooks
+
+Pre-commit hooks automatically run before each commit to:
+
+- Remove trailing whitespace
+- Fix end-of-file formatting
+- Validate YAML syntax
+- Check for debug statements
+- Run Ruff linter and formatter on Python code
+
+The hooks are configured in `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.3.0
+  hooks:
+  - id: trailing-whitespace
+  - id: end-of-file-fixer
+  - id: check-yaml
+  - id: debug-statements
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  rev: 'v0.15.2'
+  hooks:
+    - id: ruff
+      args: [--fix, --exit-non-zero-on-fix]
+    - id: ruff-format
+```
+
+If pre-commit hooks fail, fix the issues before committing:
+
+```bash
+# Manually run linting
+make lint
+
+# Fix imports automatically
+make fix-imports
+```
+
+### Running Tests
+
+Before submitting a pull request:
+
+```bash
+# Run all tests (linting + Python + JavaScript)
+make test
+
+# Run only Python tests
+py.test -n auto --maxfail=10 tests/
+
+# Run only JavaScript tests
+npm test
+
+# Run tests in watch mode
+make watch-tests
+```
+
+## Committing Your Changes
+
+### Commit Message Guidelines
+
+Write clear, concise commit messages:
+
+- Use the imperative mood ("Add feature" not "Added feature")
+- Keep the first line under 72 characters
+- Reference issue numbers when applicable
+- Explain the "why" not just the "what"
+
+**Good examples:**
+```
+Fix security key authentication timeout
+
+Users were being logged out after 15 minutes when using WebAuthn.
+Increased session timeout to 60 minutes to match SMS auth.
+
+Fixes #1234
+```
+
+```
+Add validation for international SMS recipients
+
+Prevents services from accidentally sending to invalid international
+numbers, reducing failed delivery costs.
+```
+
+**Bad examples:**
+```
+Updated code
+Fixed bug
+Changes
+```
+
+### Commit Workflow
+
+```bash
+# Stage your changes
+git add <files>
+
+# Commit (pre-commit hooks will run automatically)
+git commit -m "Your descriptive commit message"
+
+# Push to your fork
+git push origin feature/your-feature-name
+```
+
+## Pull Request Process
+
+### Before Submitting
+
+- [ ] All tests pass locally
+- [ ] Code follows the [style guide](/contributing/code-style)
+- [ ] New code has appropriate test coverage
+- [ ] Documentation is updated if needed
+- [ ] Pre-commit hooks pass without errors
+
+### Creating a Pull Request
+
+1. **Push your branch to your fork**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+2. **Open a pull request** on GitHub against the `main` branch
+
+3. **Write a clear PR description**
+   
+   Include:
+   - Summary of changes
+   - Why this change is needed
+   - Any breaking changes
+   - Screenshots for UI changes
+   - Testing steps
+
+   Example:
+   ```markdown
+   ## Summary
+   Adds validation for international phone numbers before sending SMS.
+   
+   ## Motivation
+   Prevents wasted costs from sending to invalid numbers.
+   
+   ## Changes
+   - Added phone number validation in `app/utils/recipients.py`
+   - Updated error messages for invalid international numbers
+   - Added tests for all international formats
+   
+   ## Testing
+   - Added unit tests in `tests/app/utils/test_recipients.py`
+   - Manually tested with UK, US, and invalid numbers
+   ```
+
+4. **Wait for review**
+   
+   Maintainers will review your PR and may request changes.
+
+### Responding to Review Feedback
+
+- Address all feedback promptly
+- Push new commits to the same branch
+- Reply to comments to confirm changes
+- Don't force-push unless requested
+
+### CI/CD Checks
+
+Your PR must pass all automated checks:
+
+- Python linting (Ruff)
+- JavaScript linting (ESLint)
+- SCSS linting (Stylelint)
+- Python tests (pytest)
+- JavaScript tests (Jest)
+
+## Code Review Guidelines
+
+### What Reviewers Look For
+
+- **Correctness**: Does the code work as intended?
+- **Testing**: Is there adequate test coverage?
+- **Style**: Does it follow project conventions?
+- **Security**: Are there any security implications?
+- **Performance**: Are there any performance concerns?
+- **Maintainability**: Is the code readable and well-organized?
+
+### Review Etiquette
+
+- Be respectful and constructive
+- Assume good intent
+- Explain the reasoning behind suggestions
+- Approve PRs when all concerns are addressed
+
+## Getting Help
+
+- **Documentation Issues**: Check the README and existing docs
+- **Technical Questions**: Open a GitHub Discussion
+- **Bug Reports**: Create a detailed issue with reproduction steps
+- **Security Issues**: Follow responsible disclosure practices
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.

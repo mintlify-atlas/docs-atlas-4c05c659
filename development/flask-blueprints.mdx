@@ -1,0 +1,364 @@
+---
+title: Flask Blueprints
+description: Flask blueprint architecture and view organization in GOV.UK Notify Admin
+---
+
+GOV.UK Notify Admin uses Flask blueprints to organize routes and views into logical groups. The application has four main blueprints, each serving a specific purpose.
+
+## Blueprint Overview
+
+Blueprints are defined in `app/main/__init__.py` and registered in `app/__init__.py:setup_blueprints()`:
+
+```python
+from flask import Blueprint
+from app.constants import JSON_UPDATES_BLUEPRINT_NAME, NO_COOKIE_BLUEPRINT_NAME
+
+main = Blueprint("main", __name__)
+json_updates = Blueprint(JSON_UPDATES_BLUEPRINT_NAME, __name__)
+no_cookie = Blueprint(NO_COOKIE_BLUEPRINT_NAME, __name__)
+```
+
+The status blueprint is defined separately:
+
+```python
+# app/status/__init__.py
+from flask import Blueprint
+
+status = Blueprint("status", __name__)
+```
+
+## The Four Blueprints
+
+### 1. Main Blueprint
+
+**Purpose**: Primary application routes for authenticated users
+
+**Location**: `app/main/`
+
+**Features**:
+- Session management (makes sessions permanent)
+- Saves service/organisation context after requests
+- Contains all user-facing functionality
+
+**Request Hooks**:
+
+```python
+main.before_request(make_session_permanent)
+main.after_request(save_service_or_org_after_request)
+```
+
+The `make_session_permanent()` function sets sessions to expire after 20 hours of inactivity, while `save_service_or_org_after_request()` stores the current service or organisation in the session.
+
+### 2. JSON Updates Blueprint
+
+**Purpose**: JSON endpoints for asynchronous page updates
+
+**Location**: `app/main/` (shares views with main blueprint)
+
+**Use Cases**:
+- Auto-updating dashboards
+- Real-time notification status updates
+- Live data feeds without full page reloads
+
+**Example**: Dashboard auto-refresh endpoints return JSON instead of HTML.
+
+### 3. No Cookie Blueprint
+
+**Purpose**: Routes that should not set or modify cookies
+
+**Location**: `app/main/` (shares views with main blueprint)
+
+**Features**:
+- No session permanence
+- No service/org saving
+- Prevents race conditions in asynchronous requests
+
+**Use Cases**:
+- Letter template previews (iframes)
+- Email branding previews
+- Document downloads
+- Any asynchronously loaded subresources
+
+**Why It Exists**: Prevents strange race conditions when multiple requests modify cookies simultaneously, particularly in the send message flow.
+
+### 4. Status Blueprint
+
+**Purpose**: Health checks and system status
+
+**Location**: `app/status/`
+
+**Features**:
+- Unauthenticated
+- Unstyled (minimal HTML)
+- No cookies
+- No session handling
+
+**Use Cases**:
+- Load balancer health checks
+- Monitoring systems
+- Uptime checks
+
+## View Organization
+
+Views are organized in `app/main/views/` by functional area:
+
+### Authentication & User Management
+
+```
+views/
+├── register.py              # User registration
+├── sign_in.py               # Sign in flow
+├── sign_out.py              # Sign out
+├── two_factor.py            # 2FA authentication
+├── verify.py                # Email/SMS verification
+├── webauthn_credentials.py  # WebAuthn (hardware keys)
+├── forgot_password.py       # Password reset
+├── new_password.py          # Set new password
+├── code_not_received.py     # Resend verification codes
+├── your_account.py          # User account settings
+└── manage_users.py          # User management
+```
+
+### Service Management
+
+```
+views/
+├── add_service.py           # Create new service
+├── your_services.py         # Service list
+├── dashboard.py             # Service dashboard
+├── service_settings/        # Service configuration
+│   ├── index.py            # Settings homepage
+│   └── branding.py         # Branding settings
+├── make_your_service_live.py  # Go-live process
+└── join_service.py          # Join existing service
+```
+
+### Templates & Messaging
+
+```
+views/
+├── templates.py             # Template management
+├── send.py                  # Send messages
+├── jobs.py                  # Batch jobs
+├── uploads.py               # File uploads
+├── notifications.py         # Notification history
+└── conversation.py          # Message threads
+```
+
+### Organisation Management
+
+```
+views/
+└── organisations/           # Organisation features
+    ├── index.py            # Organisation dashboard
+    └── branding.py         # Organisation branding
+```
+
+### Branding & Customization
+
+```
+views/
+├── email_branding.py        # Email branding
+├── letter_branding.py       # Letter branding
+└── template_email_files.py  # Email attachments
+```
+
+### Platform Administration
+
+```
+views/
+├── platform_admin.py        # Platform admin dashboard
+├── find_users.py            # Search users
+├── providers.py             # SMS/email providers
+├── performance.py           # Performance metrics
+└── pricing.py               # Pricing configuration
+```
+
+### API & Integration
+
+```
+views/
+├── api_keys.py              # API key management
+├── inbound_number.py        # Inbound SMS numbers
+└── agreement.py             # MOU/agreements
+```
+
+### Miscellaneous
+
+```
+views/
+├── index.py                 # Homepage
+├── tour.py                  # Product tour
+├── feedback.py              # User feedback
+├── history.py               # Audit history
+├── invites.py               # Service invitations
+├── report_requests.py       # Data exports
+├── returned_letters.py      # Returned letter handling
+├── unsubscribe_requests.py  # Unsubscribe management
+├── security_policy.py       # Security policy pages
+└── document_download.py     # Document downloads
+```
+
+## Complete View List
+
+The application includes **46 view modules**:
+
+1. add_service
+2. agreement
+3. api_keys
+4. code_not_received
+5. conversation
+6. dashboard
+7. document_download
+8. email_branding
+9. feedback
+10. find_users
+11. forgot_password
+12. history
+13. inbound_number
+14. index
+15. invites
+16. jobs
+17. join_service
+18. letter_branding
+19. make_your_service_live
+20. manage_users
+21. new_password
+22. notifications
+23. org_member_make_service_live
+24. organisations/ (directory)
+25. performance
+26. platform_admin
+27. pricing
+28. providers
+29. register
+30. report_requests
+31. returned_letters
+32. security_policy
+33. send
+34. service_settings/ (directory)
+35. sign_in
+36. sign_out
+37. sub_navigation_dictionaries
+38. template_email_files
+39. templates
+40. tour
+41. two_factor
+42. unsubscribe_requests
+43. uploads
+44. verify
+45. webauthn_credentials
+46. your_account
+47. your_services
+
+## Route Registration
+
+Routes are registered using decorators on view functions:
+
+```python
+from app.main import main
+
+@main.route("/services/<uuid:service_id>")
+@user_has_permissions()
+def service_dashboard(service_id):
+    # View logic here
+    pass
+```
+
+### Route Patterns
+
+Common route patterns:
+
+```python
+# Service-scoped routes
+@main.route("/services/<uuid:service_id>/dashboard")
+
+# Organisation-scoped routes
+@main.route("/organisations/<uuid:org_id>")
+
+# Template routes
+@main.route("/services/<uuid:service_id>/templates/<uuid:template_id>")
+
+# JSON endpoints (json_updates blueprint)
+@json_updates.route("/services/<uuid:service_id>/notifications.json")
+
+# No-cookie routes (no_cookie blueprint)
+@no_cookie.route("/services/<uuid:service_id>/preview/<uuid:template_id>")
+```
+
+## Forms
+
+Forms are defined in `app/main/forms.py` (over 118,000 lines, indicating extensive form validation):
+
+```python
+from flask_wtf import FlaskForm
+from wtforms import StringField, validators
+
+class ServiceNameForm(FlaskForm):
+    name = StringField(
+        'Service name',
+        validators=[validators.DataRequired()]
+    )
+```
+
+## Validators
+
+Custom form validators are in `app/main/validators.py`, providing:
+- Email validation
+- Phone number validation
+- Template content validation
+- Permission checking
+- Unique constraint validation
+
+## Permission Decorators
+
+Views use permission decorators to control access:
+
+```python
+from app.utils.user import user_has_permissions
+
+@main.route("/services/<uuid:service_id>/settings")
+@user_has_permissions("manage_service")
+def service_settings(service_id):
+    # Only users with manage_service permission can access
+    pass
+```
+
+## Blueprint Registration
+
+Blueprints are registered in `app/__init__.py:setup_blueprints()`:
+
+```python
+def setup_blueprints(application):
+    from app.main import json_updates as json_updates_blueprint
+    from app.main import main as main_blueprint
+    from app.main import no_cookie as no_cookie_blueprint
+    from app.status import status as status_blueprint
+
+    application.register_blueprint(main_blueprint)
+    application.register_blueprint(json_updates_blueprint)
+    application.register_blueprint(no_cookie_blueprint)
+    application.register_blueprint(status_blueprint)
+```
+
+## Best Practices
+
+### When to Use Each Blueprint
+
+- **main**: All standard user-facing pages
+- **json_updates**: AJAX endpoints that return JSON
+- **no_cookie**: Embedded content, previews, downloads
+- **status**: Health checks only
+
+### View Organization
+
+- Group related views in the same module
+- Use subdirectories for complex feature areas (organisations, service_settings)
+- Keep view functions focused and delegate to models/clients
+- Use decorators for authentication and authorization
+
+## Next Steps
+
+- [Models](/development/models) - Learn about data models used in views
+- [API Clients](/development/api-clients) - Understand how views interact with the API
+- [Application Structure](/development/application-structure) - See the overall architecture

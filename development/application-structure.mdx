@@ -1,0 +1,210 @@
+---
+title: Application Structure
+description: Directory structure and organization of GOV.UK Notify Admin
+---
+
+GOV.UK Notify Admin is a Flask-based web application with a well-organized directory structure that separates concerns across different layers of the application.
+
+## Top-Level Structure
+
+The application follows a standard Flask layout with additional directories for assets, tests, and deployment:
+
+```
+notifications-admin/
+├── app/                    # Main application code
+├── tests/                  # Test suite
+├── application.py          # WSGI entry point
+├── gunicorn_config.py      # Gunicorn web server configuration
+├── requirements.txt        # Python dependencies
+├── package.json            # Node.js dependencies (frontend)
+└── docker/                 # Docker configuration
+```
+
+### Entry Point
+
+The application is initialized in `application.py`:
+
+```python
+from flask import Flask
+from app import create_app
+
+application = Flask("app")
+create_app(application)
+```
+
+This creates a Flask application instance and configures it using the factory pattern via `create_app()`.
+
+## Application Directory (`app/`)
+
+The `app/` directory contains all application code organized by function:
+
+```
+app/
+├── __init__.py             # Application factory and setup
+├── assets/                 # Frontend assets (CSS, JS, images)
+├── commands.py             # Flask CLI commands
+├── config.py               # Configuration classes
+├── constants.py            # Application constants
+├── event_handlers.py       # Event handling (login events, etc.)
+├── extensions.py           # Third-party extension instances
+├── formatters.py           # Data formatting utilities
+├── main/                   # Main blueprint (views and forms)
+├── models/                 # Data models
+├── navigation.py           # Navigation menu definitions
+├── notify_client/          # API client modules
+├── notify_session.py       # Custom session interface
+├── s3_client/              # S3 client for file storage
+├── status/                 # Status/health check blueprint
+├── template_previews.py    # Template preview client
+├── templates/              # Jinja2 templates
+├── url_converters.py       # Custom URL converters
+├── utils/                  # Utility functions
+├── version.py.dist         # Version file template
+└── webauthn_server.py      # WebAuthn configuration
+```
+
+### Core Files
+
+#### `__init__.py` - Application Factory
+
+The main application factory that:
+- Initializes Flask extensions (CSRF, login manager, metrics)
+- Registers blueprints
+- Sets up error handlers
+- Configures Jinja2 templates
+- Adds template filters
+- Registers before/after request handlers
+
+Key functions:
+- `create_app(application)` - Main factory function
+- `setup_blueprints(application)` - Registers all blueprints
+- `register_errorhandlers(application)` - Sets up error handling
+- `init_jinja(application)` - Configures template engine
+
+#### `config.py` - Configuration
+
+Defines configuration classes for different environments:
+
+```python
+class Config:
+    ADMIN_CLIENT_SECRET = os.environ.get("ADMIN_CLIENT_SECRET")
+    API_HOST_NAME = os.environ.get("API_HOST_NAME")
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+    
+    # Session config
+    PERMANENT_SESSION_LIFETIME = 20 * 60 * 60  # 20 hours
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = True
+    
+    # Service limits
+    DEFAULT_SERVICE_LIMIT = 50
+    DEFAULT_LIVE_SERVICE_RATE_LIMITS = {
+        "email": 250_000,
+        "sms": 250_000,
+        "letter": 20_000,
+    }
+```
+
+## Assets Directory
+
+Frontend assets are organized by type:
+
+```
+assets/
+├── error_pages/            # Static error page assets
+├── images/                 # Images and icons
+│   ├── branding/          # Branding assets
+│   ├── email-template/    # Email template images
+│   ├── letter-template/   # Letter template images
+│   └── product/           # Product images
+├── javascripts/           # JavaScript files
+│   └── esm/              # ES6 modules
+└── stylesheets/           # SCSS/CSS files
+    ├── components/        # Component styles
+    ├── govuk-elements/    # GOV.UK Design System elements
+    ├── govuk-frontend/    # GOV.UK Frontend overrides
+    ├── local/            # Local custom styles
+    └── views/            # View-specific styles
+```
+
+## Templates Directory
+
+Jinja2 templates are organized by function:
+
+```
+templates/
+├── components/            # Reusable components
+├── error/                 # Error pages (404, 500, etc.)
+├── govuk_frontend_jinja_overrides/  # GOV.UK component overrides
+├── partials/              # Template partials/includes
+├── views/                 # Page templates (organized by feature)
+└── layouts/               # Base layouts
+```
+
+## Utils Directory
+
+Utility modules provide shared functionality:
+
+```
+utils/
+├── __init__.py
+├── branding.py            # Branding utilities
+├── csv.py                 # CSV processing
+├── govuk_frontend_field.py # GOV.UK form field helpers
+├── image_processing.py    # Image manipulation
+├── letters.py             # Letter-specific utilities
+├── login.py               # Login helpers
+├── pagination.py          # Pagination utilities
+├── services.py            # Service utilities
+├── templates.py           # Template utilities
+├── time.py                # Time/date utilities
+├── user.py                # User utilities
+└── user_permissions.py    # Permission checking
+```
+
+## S3 Client
+
+S3 integration for file storage:
+
+```
+s3_client/
+├── __init__.py
+└── logo_client.py         # Logo upload/download
+```
+
+## File Count
+
+The application contains approximately **145 Python files** across all directories, demonstrating a substantial codebase with clear separation of concerns.
+
+## Design Principles
+
+### Separation of Concerns
+
+- **Views** handle HTTP requests and responses
+- **Models** represent domain objects and data
+- **API Clients** communicate with backend services
+- **Templates** handle presentation
+- **Utilities** provide shared functionality
+
+### Blueprint Architecture
+
+The application uses Flask blueprints to organize routes:
+
+- `main` - Primary application routes
+- `json_updates` - JSON endpoints for async updates
+- `no_cookie` - Routes that don't set cookies (previews)
+- `status` - Health check and status endpoints
+
+### Configuration Management
+
+Environment-based configuration using environment variables and config classes allows the same codebase to run in development, staging, and production.
+
+### Asset Management
+
+Static assets are fingerprinted for cache busting and served efficiently using Flask's asset handling with CDN support.
+
+## Next Steps
+
+- [Flask Blueprints](/development/flask-blueprints) - Learn about the blueprint structure
+- [Models](/development/models) - Explore the data models
+- [API Clients](/development/api-clients) - Understand API integration

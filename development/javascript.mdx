@@ -1,0 +1,479 @@
+---
+title: JavaScript architecture
+description: JavaScript modules, patterns, and progressive enhancement in GOV.UK Notify Admin
+---
+
+## Overview
+
+GOV.UK Notify Admin uses a **dual-bundle JavaScript architecture**:
+
+1. **Modern ESM bundle** (`all-esm.mjs`) - ES modules for modern browsers
+2. **Legacy ES5 bundle** (`all.js`) - jQuery-based code for older browsers
+
+Both bundles are loaded in templates, but browsers only execute the one they support.
+
+## Architecture
+
+### Module locations
+
+```
+app/assets/javascripts/
+├── esm/                           # Modern ES modules (23 files, ~2,360 lines)
+│   ├── all-esm.mjs               # Entry point and initialization
+│   ├── live-search.mjs
+│   ├── copy-to-clipboard.mjs
+│   ├── file-upload.mjs
+│   ├── enhanced-textbox.mjs
+│   ├── authenticate-security-key.mjs
+│   └── ...
+├── modules.js                     # Legacy module system
+├── main.js                        # Legacy initialization
+├── stick-to-window-when-scrolling.js  # Sticky navigation (1,003 lines)
+├── updateContent.js               # AJAX polling and DOM diffing
+├── templateFolderForm.js
+└── cookieCleanup.js
+```
+
+### ESM entry point: all-esm.mjs
+
+The ESM bundle imports GOV.UK Frontend components and custom modules:
+
+```javascript
+// GOV.UK Frontend modules
+import { createAll, Header, Button, Radios, ErrorSummary, SkipLink, Tabs, ServiceNavigation } from 'govuk-frontend';
+
+// Custom modules
+import CollapsibleCheckboxes from './collapsible-checkboxes.mjs';
+import FocusBanner from './focus-banner.mjs';
+import ColourPreview from './colour-preview.mjs';
+import FileUpload from './file-upload.mjs';
+import Autofocus from './autofocus.mjs';
+import LiveSearch from './live-search.mjs';
+import CopyToClipboard from './copy-to-clipboard.mjs';
+// ... 20+ more modules
+
+import morphdom from 'morphdom';
+```
+
+#### GOV.UK Frontend initialization
+
+```javascript
+createAll(Button, { preventDoubleClick: true });
+createAll(Header);
+createAll(Radios);
+createAll(ErrorSummary);
+createAll(SkipLink);
+createAll(Tabs);
+createAll(ServiceNavigation);
+```
+
+#### Custom module initialization
+
+Modules are initialized by querying for `data-notify-module` attributes:
+
+```javascript
+const $livesearch = document.querySelector('[data-notify-module="live-search"]');
+if ($livesearch) {
+  new LiveSearch($livesearch);
+}
+
+const $fileUpload = document.querySelector('[data-notify-module="file-upload"]');
+if ($fileUpload) {
+  new FileUpload($fileUpload);
+}
+
+const $CopyToClipboardArray = document.querySelectorAll('[data-notify-module="copy-to-clipboard"]');
+if ($CopyToClipboardArray.length > 0) {
+  $CopyToClipboardArray.forEach((el) => new CopyToClipboard(el));
+}
+```
+
+Some modules can appear multiple times on a page (e.g., copy-to-clipboard), while others are singletons (e.g., live-search).
+
+### Legacy bundle: all.js
+
+Combines jQuery and custom modules for older browsers:
+
+```javascript
+// Dependencies (from rollup.config.mjs input)
+[
+  'node_modules/jquery/dist/jquery.min.js',
+  'node_modules/timeago/jquery.timeago.js',
+  'node_modules/textarea-caret/index.js',
+  'node_modules/cbor-js/cbor.js',
+  'app/assets/javascripts/modules.js',
+  'app/assets/javascripts/stick-to-window-when-scrolling.js',
+  'app/assets/javascripts/cookieCleanup.js',
+  'app/assets/javascripts/updateContent.js',
+  'app/assets/javascripts/templateFolderForm.js',
+  'app/assets/javascripts/main.js'
+]
+```
+
+## Module patterns
+
+### Modern ESM module
+
+Example: `live-search.mjs`
+
+```javascript
+import { isSupported } from 'govuk-frontend';
+
+class LiveSearch {
+  constructor($module) {
+    if (!isSupported()) {
+      return this;
+    }
+
+    this.$module = $module;
+    this.$searchBox = this.$module.querySelector('input');
+    this.$searchLabel = this.$module.querySelector('label');
+    this.$liveRegion = this.$module.querySelector('.live-search__status');
+    this.$targets = document.querySelectorAll(this.$module.dataset.targets);
+    this.state = 'loaded';
+
+    this.$searchBox.addEventListener("input", () => {
+      this.filter(this.$searchBox, this.$searchLabel, this.$liveRegion, this.$targets);
+    });
+
+    this.filter(this.$searchBox, this.$searchLabel, this.$liveRegion, this.$targets);
+  }
+
+  filter($searchBox, $searchLabel, $liveRegion, $targets) {
+    let query = this.normalize(this.$searchBox.value);
+    let results = 0;
+
+    $targets.forEach(($node) => {
+      let contents = $node.querySelectorAll('.live-search-relevant').length 
+        ? $node.querySelectorAll('.live-search-relevant') 
+        : [$node];
+      let isMatch = false;
+
+      contents.forEach((content_item) => {
+        if (this.normalize(content_item.textContent).includes(this.normalize(query))) {
+          isMatch = true;
+        }
+      });
+
+      if (isMatch || query === '' || $node.querySelectorAll(':checked').length > 0) {
+        $node.removeAttribute('hidden');
+        results++;
+      } else {
+        $node.setAttribute('hidden', '');
+      }
+    });
+
+    // Update ARIA labels and live region
+    if (this.state === 'loaded') {
+      if (query !== '') {
+        $searchBox.setAttribute('aria-label', $searchLabel.textContent.trim() + ', ' + this.resultsSummary(results));
+      }
+      this.state = 'active';
+    } else {
+      $searchBox.removeAttribute('aria-label');
+      $liveRegion.textContent = this.resultsSummary(results);
+    }
+
+    // Trigger sticky recalculation
+    if ('stickAtBottomWhenScrolling' in window.GOVUK) {
+      window.GOVUK.stickAtBottomWhenScrolling.recalculate();
+    }
+  }
+
+  normalize(string) {
+    return string.toLowerCase().replace(/ /g, '');
+  }
+
+  resultsSummary(num) {
+    if (num === 0) return "no results";
+    return num + (num === 1 ? " result" : " results");
+  }
+}
+
+export default LiveSearch;
+```
+
+Key patterns:
+- Check browser support with `isSupported()`
+- Use `dataset` to read configuration from HTML attributes
+- Update ARIA attributes for accessibility
+- Trigger recalculation in related systems
+
+### Legacy jQuery module
+
+Example: `updateContent.js`
+
+```javascript
+(function(global) {
+  "use strict";
+
+  var queues = {};
+  var timeouts = {};
+  var defaultInterval = 2000;
+  var intervals = {};
+
+  var poll = function(renderer, resource, queue, form) {
+    let timeout;
+    let startTime = Date.now();
+
+    if (document.visibilityState !== "hidden" && queue.push(renderer) === 1) {
+      $.ajax(resource, {
+        'method': form ? 'post' : 'get',
+        'data': form ? $('#' + form).serialize() : {}
+      }).done(response => {
+        flushQueue(queue, response);
+        if (response.stop === 1) {
+          window.clearTimeout(timeout);
+        } else {
+          intervals[resource] = calculateBackoff(Date.now() - startTime);
+        }
+      }).fail(response => {
+        window.clearTimeout(timeout);
+        clearQueue(queue);
+        if (response.status === 401) {
+          window.location.reload();
+        }
+      });
+    }
+
+    timeout = window.setTimeout(
+      () => poll.apply(window, arguments), intervals[resource]
+    );
+  };
+
+  global.GOVUK.NotifyModules.UpdateContent = function() {
+    this.start = component => {
+      var $component = $(component);
+      var resource = $component.data('resource');
+      intervals[resource] = defaultInterval;
+
+      setTimeout(
+        () => poll(
+          getRenderer($contents, key),
+          resource,
+          getQueue(resource),
+          form
+        ),
+        intervals[resource]
+      );
+    };
+  };
+})(window);
+```
+
+Key patterns:
+- IIFE to avoid global pollution
+- jQuery for DOM manipulation
+- Registers on `GOVUK.NotifyModules` namespace
+- Legacy module system via `modules.js`
+
+### Legacy module system: modules.js
+
+```javascript
+GOVUK.notifyModules = {
+  find: function (container) {
+    container = container || $('body');
+    var moduleSelector = '[data-notify-module]';
+    var modules = container.find(moduleSelector);
+
+    if (container.is(moduleSelector)) {
+      modules = modules.add(container);
+    }
+
+    return modules;
+  },
+
+  start: function (container) {
+    var modules = this.find(container);
+
+    for (var i = 0, l = modules.length; i < l; i++) {
+      var element = $(modules[i]);
+      var type = camelCaseAndCapitalise(element.data('notifyModule'));
+      var started = element.data('module-started');
+
+      if (typeof GOVUK.NotifyModules[type] === 'function' && !started) {
+        module = new GOVUK.NotifyModules[type]();
+        module.start(element);
+        element.data('module-started', true);
+      }
+    }
+  }
+};
+```
+
+This system:
+- Scans for `[data-notify-module]` attributes
+- Converts `data-notify-module="update-content"` to `UpdateContent`
+- Instantiates and starts the module
+
+## Progressive enhancement
+
+### Browser support detection
+
+GOV.UK Frontend adds `.govuk-frontend-supported` to `<body>` when ES modules work:
+
+```javascript
+if (document.body.classList.contains('govuk-frontend-supported')) {
+  $(() => $("time.timeago").timeago());
+  $(() => GOVUK.stickAtTopWhenScrolling.init());
+  $(() => GOVUK.stickAtBottomWhenScrolling.init());
+  $(() => GOVUK.notifyModules.start());
+}
+```
+
+CSS uses this class to show/hide enhanced features:
+
+```scss
+.live-search {
+  display: none;
+
+  .#{$govuk-frontend-supported-css-class} & {
+    display: block;
+  }
+}
+```
+
+## Key modules
+
+### LiveSearch
+
+Filters a list of elements in real-time:
+
+**Template usage:**
+```jinja
+<div data-notify-module="live-search" data-targets=".template-list-item">
+  <input type="text" />
+  <div aria-live="polite" class="live-search__status govuk-visually-hidden"></div>
+</div>
+```
+
+**Features:**
+- Case-insensitive search
+- Keeps checked items visible
+- ARIA live region announcements
+- Triggers sticky nav recalculation
+
+### CopyToClipboard
+
+Copies text to clipboard with visual feedback:
+
+```jinja
+<div data-notify-module="copy-to-clipboard" data-clipboard-text="{{ api_key }}">
+  <button>Copy API key</button>
+</div>
+```
+
+### FileUpload
+
+Enhances file input with drag-and-drop and preview.
+
+### AuthenticateSecurityKey / RegisterSecurityKey
+
+WebAuthn implementation for hardware security keys:
+
+```javascript
+const $authenticateSecurityKey = document.querySelector('[data-notify-module="authenticate-security-key"]');
+if ($authenticateSecurityKey) {
+  new AuthenticateSecurityKey($authenticateSecurityKey);
+}
+```
+
+Uses `cbor-js` for credential encoding.
+
+### UpdateContent
+
+Polls server for updates and patches DOM efficiently:
+
+**Template usage:**
+```jinja
+<div data-notify-module="update-content" data-resource="/status" data-key="html">
+  <div>Initial content</div>
+</div>
+```
+
+**Features:**
+- Adaptive polling interval based on response time
+- Efficient DOM updates with `morphdom`
+- Stops polling when `response.stop === 1`
+- Pauses when page is hidden
+
+**Morphdom integration:**
+```javascript
+window.Morphdom = morphdom;  // Exposed for updateContent.js
+```
+
+### StickAtTopWhenScrolling / StickAtBottomWhenScrolling
+
+Complex sticky positioning system (1,003 lines):
+
+**Template usage:**
+```html
+<div class="js-stick-at-top-when-scrolling">
+  <nav>Sticky navigation</nav>
+</div>
+```
+
+**Features:**
+- Viewport width detection (> 768px)
+- Scroll position tracking
+- Shim insertion to preserve layout
+- Dialog mode for stacked sticky elements
+- Focus overlap detection and adjustment
+- Automatic recalculation on resize
+
+**Public API:**
+```javascript
+GOVUK.stickAtTopWhenScrolling.init();
+GOVUK.stickAtTopWhenScrolling.recalculate();
+GOVUK.stickAtBottomWhenScrolling.init();
+```
+
+## Testing
+
+### Running tests
+
+```bash
+# Run all JavaScript tests
+npm test
+
+# Watch mode
+npm run test-watch
+
+# Debug a specific test
+npm run debug --test=path/to/test.mjs
+```
+
+### Test configuration
+
+From `package.json`:
+
+```json
+{
+  "jest": {
+    "setupFiles": ["<rootDir>/tests/javascripts/support/setup.js"],
+    "testEnvironmentOptions": {
+      "url": "https://www.notifications.service.gov.uk"
+    },
+    "transform": {
+      "^.+\\mjs$": "babel-jest"
+    },
+    "testMatch": ["<rootDir>/**/?(*.)(test).{js,mjs}"],
+    "testEnvironment": "jsdom"
+  }
+}
+```
+
+## Linting
+
+```bash
+# Lint JavaScript with ESLint
+npm run lint:js
+```
+
+Configuration in `eslint.config.js` (ESLint 9 flat config).
+
+## Related documentation
+
+- [Templates and Jinja](/development/templates-and-jinja) - How HTML connects to JavaScript
+- [Static asset management](/development/static-assets) - Build and deployment
+- [SCSS and styling](/development/styling) - CSS architecture

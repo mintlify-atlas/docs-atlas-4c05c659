@@ -1,0 +1,581 @@
+---
+title: Branding
+description: Customize email and letter branding for your GOV.UK Notify service
+---
+
+## Overview
+
+Branding allows you to customize how your emails and letters appear to recipients. You can add logos, choose colors, and create a consistent visual identity for your service communications.
+
+## Email Branding
+
+Email branding controls the logo, colors, and header that appear in your emails.
+
+### Choosing Email Branding
+
+Access email branding at `/services/{service_id}/service-settings/email-branding`.
+
+#### Available Options
+
+<Tabs>
+  <Tab title="GOV.UK Branding">
+    **Default option** - Uses the GOV.UK logo and standard government styling.
+    
+    **Appearance:**
+    - GOV.UK logo in header
+    - Black text on white background
+    - Standard link colors
+    - No custom branding
+    
+    **When to use:**
+    - Default for all new services
+    - Cross-government communications
+    - When no specific branding needed
+    
+    Select at `/services/{service_id}/service-settings/email-branding/govuk`.
+  </Tab>
+
+  <Tab title="NHS Branding">
+    **NHS logo and colors** - For NHS organizations only.
+    
+    **Appearance:**
+    - NHS logo
+    - NHS blue header
+    - Accessible color scheme
+    
+    **Eligibility:**
+    Only available if your service organization type is NHS or NHS GP.
+    
+    Select at `/services/{service_id}/service-settings/email-branding/nhs`.
+  </Tab>
+
+  <Tab title="Organization Branding">
+    **Your organization's branding** from the organization's branding pool.
+    
+    **Availability:**
+    - Shown if your organization has created brandings
+    - Multiple options may be available
+    - Shared across services in your organization
+    
+    Preview before applying to see how it looks.
+  </Tab>
+
+  <Tab title="Custom Branding">
+    **Create new branding** with your own logo and colors.
+    
+    Available for:
+    - Central government (more options)
+    - Local government  
+    - NHS organizations
+    - Other public sector bodies
+  </Tab>
+</Tabs>
+
+### Creating Custom Email Branding
+
+#### For Central Government
+
+Central government services have three logo options:
+
+<Steps>
+  <Step title="Choose Logo Type">
+    At `/services/{service_id}/service-settings/email-branding/choose-logo`:
+    
+    **Organization logo** - Your department or agency logo
+    - Upload your logo
+    - Add optional banner color
+    
+    **Government identity logo** - Single Identity System crest or insignia  
+    - Request creation through support
+    - Follows government branding guidelines
+    - Professionally designed
+  </Step>
+
+  <Step title="Select Banner Style">
+    For organization logos, choose banner type at `/services/{service_id}/service-settings/email-branding/add-banner`:
+    
+    **Organization logo** - Logo only in header
+    - Clean, minimal appearance
+    - Logo on white background
+    
+    **Colored banner with logo** - Logo on colored background
+    - Brand color across header
+    - More prominent visual identity
+  </Step>
+
+  <Step title="Choose Banner Color (if applicable)">
+    Select banner color at `/services/{service_id}/service-settings/email-branding/choose-banner-colour`:
+    
+    **Government Identity System colors:**
+    - Department for Education - Blue `#347CA9`
+    - Home Office - Purple `#9325B2`
+    - Ministry of Justice - Blue `#231F20`
+    - And many more...
+    
+    **Custom color:**
+    - Enter hex code (e.g., `#FF0000`)
+    - Preview shows result
+    - Must meet accessibility contrast requirements
+    
+    <Warning>
+      Ensure sufficient contrast between banner color and logo for accessibility.
+    </Warning>
+  </Step>
+
+  <Step title="Upload Logo">
+    At `/services/{service_id}/service-settings/email-branding/upload-logo`:
+    
+    **File requirements:**
+    - PNG or SVG format  
+    - Max file size: 2MB
+    - Recommended: Transparent background
+    - Minimum width: 200px
+    - For SVG: No embedded text or images
+    
+    **Upload process:**
+    - Click "Choose file" or drag and drop
+    - File is validated for format and safety
+    - Temporary preview generated
+  </Step>
+
+  <Step title="Set Alt Text">
+    At `/services/{service_id}/service-settings/email-branding/preview`:
+    
+    Enter alternative text for screen readers:
+    - Describe the logo: "Department for Transport"
+    - Keep it concise
+    - Don't include "logo" (already implied)
+    
+    **Preview shows:**
+    - How email header looks
+    - Logo placement
+    - Color scheme
+    - Example message content
+  </Step>
+
+  <Step title="Save Branding">
+    Confirm to save the branding:
+    - Applied to your service
+    - Added to organization's branding pool
+    - Available for other services in your org
+    - Logo stored permanently
+    
+    <Tip>
+      If this is your organization's first branding and you have no other live services, it may become the organization default.
+    </Tip>
+  </Step>
+</Steps>
+
+#### For Other Organizations
+
+<Steps>
+  <Step title="Choose Banner Type">
+    Non-central government services start at `/services/{service_id}/service-settings/email-branding/add-banner`:
+    
+    Select:
+    - **Organization logo** - Logo only
+    - **Colored banner with logo** - Logo with background color
+  </Step>
+
+  <Step title="Upload Logo">
+    Same requirements as central government:
+    - PNG or SVG
+    - Max 2MB  
+    - Transparent background recommended
+    - No embedded content in SVG
+  </Step>
+
+  <Step title="Set Alt Text and Save">
+    Enter alt text, preview, and save.
+  </Step>
+</Steps>
+
+### Requesting Government Identity Logos
+
+For official government crests and insignia:
+
+<Steps>
+  <Step title="Select Single Identity Option">
+    At `/services/{service_id}/service-settings/email-branding/choose-logo`, select "Government single identity crest or insignia".
+  </Step>
+
+  <Step title="View Information">
+    See requirements at `/services/{service_id}/service-settings/email-branding/request-government-identity-logo`:
+    - Available crests shown
+    - Usage guidelines
+    - Example branding
+  </Step>
+
+  <Step title="Enter Logo Text">
+    At `/services/{service_id}/service-settings/email-branding/request-government-identity-logo/enter-text`:
+    
+    Provide the text for your crest:
+    - Department name
+    - Agency name
+    - Exact wording required
+    
+    Example: "Department for Education"
+  </Step>
+
+  <Step title="Submit Request">
+    A support ticket is created automatically:
+    - Notify team reviews request
+    - Branding created professionally
+    - Response within 1 working day
+    - Applied to your service when ready
+  </Step>
+</Steps>
+
+### Requesting Custom Branding Help
+
+If you need assistance:
+
+1. Go to `/services/{service_id}/service-settings/email-branding/request`
+2. Describe your branding needs:
+   - Logo requirements
+   - Color preferences
+   - Special considerations
+3. Submit request
+4. Notify team responds by next working day
+
+<Note>
+  Support requests create Zendesk tickets tagged with `notify_task_email_branding` or `notify_task_email_branding_gov`.
+</Note>
+
+## Letter Branding
+
+Letter branding adds your logo to printed letters.
+
+### Choosing Letter Branding
+
+Access at `/services/{service_id}/service-settings/letter-branding`.
+
+#### Available Options
+
+**No logo** - Plain letters without branding
+- Default for new services
+- Simple, unbranded appearance
+- Text only
+
+**NHS branding** - NHS logo on letters
+- NHS organizations only  
+- Standard NHS visual identity
+
+**Organization branding** - From your organization's pool
+- Pre-created brandings
+- Shared across services
+
+**Custom branding** - Upload your own logo
+
+### Creating Letter Branding
+
+<Steps>
+  <Step title="Upload Logo">
+    At `/services/{service_id}/service-settings/letter-branding/upload-branding`:
+    
+    **File requirements:**
+    - SVG format only
+    - Max 2MB
+    - Black or single color
+    - No text in SVG (use shapes only)
+    - No embedded images
+    
+    **Design guidelines:**
+    - Height: ~25mm recommended
+    - Width: ~100mm maximum
+    - Clean, simple design
+    - High contrast for printing
+  </Step>
+
+  <Step title="Set Branding Name">
+    At `/services/{service_id}/service-settings/letter-branding/set-name`:
+    
+    Enter name for the branding:
+    - Internal reference only
+    - Not shown to recipients
+    - Must be unique
+    
+    Example: "Department for Transport logo"
+  </Step>
+
+  <Step title="Preview and Save">
+    Preview shows:
+    - Logo placement on letter
+    - Size and positioning
+    - How it looks with letter content
+    
+    Save to:
+    - Apply to your service
+    - Add to organization pool
+    - Make available for other services
+  </Step>
+</Steps>
+
+### Letter Branding Placement
+
+Logos appear:
+- **Top right** of first page
+- Above letter content
+- Consistent positioning
+- Printed in black (or spot color if supported)
+
+### Requesting Letter Branding Help
+
+1. Navigate to `/services/{service_id}/service-settings/letter-branding/request`
+2. Describe requirements
+3. Attach logo files if available
+4. Submit for support team review
+
+## Managing Branding
+
+### Viewing Current Branding
+
+Check current branding on service settings page:
+- Email branding name
+- Letter branding name  
+- Preview links
+- Change options
+
+### Changing Branding
+
+<Steps>
+  <Step title="Access Branding Settings">
+    From service settings, click on the branding type you want to change.
+  </Step>
+
+  <Step title="Select New Branding">
+    Choose from available options:
+    - Organization pool
+    - GOV.UK/NHS standard
+    - Create new custom branding
+  </Step>
+
+  <Step title="Preview Changes">
+    View preview at `/services/{service_id}/service-settings/{type}-branding/confirm-change`:
+    - See example message
+    - Check logo appears correctly
+    - Verify colors and layout
+  </Step>
+
+  <Step title="Confirm Update">
+    Click "Save" to apply:
+    - Takes effect immediately
+    - Applies to all future messages
+    - Existing sent messages unchanged
+    
+    <Note>
+      Test by sending yourself a message after changing branding.
+    </Note>
+  </Step>
+</Steps>
+
+### Organization Branding Pools
+
+Organizations maintain pools of approved brandings:
+
+**Adding to pool:**
+- Automatically added when you create custom branding
+- Platform admins can add when setting service branding
+- Shared across all services in organization
+
+**Benefits:**
+- Consistent branding across services
+- No need to recreate for each service
+- Centralized brand management
+- Faster setup for new services
+
+## Platform Admin Features
+
+Platform administrators have additional branding capabilities:
+
+### Setting Any Branding
+
+At `/services/{service_id}/service-settings/set-{type}-branding`:
+- Search all brandings system-wide
+- Apply any branding to any service
+- Preview before applying
+- Add to organization pool option
+
+### Branding Pool Management
+
+When setting branding for a service with an organization:
+
+1. Select branding from full catalog
+2. Preview
+3. Choose whether to add to organization pool
+4. Apply to service
+
+At `/services/{service_id}/service-settings/set-{type}-branding/add-to-branding-pool-step`:
+- "Yes" - Add to org pool for reuse
+- "No" - Apply to this service only
+
+## Email Branding Preview
+
+Branding affects email appearance:
+
+**Header:**
+- Logo (if using custom branding)
+- Banner color (if configured)
+- GOV.UK or NHS logo (if using standard branding)
+
+**Body:**
+- Template content
+- Standard link colors
+- Consistent typography
+
+**Footer:**
+- Service name
+- Unsubscribe link (if enabled)
+- Standard government footer
+
+## Letter Branding Preview
+
+Branding affects letter appearance:
+
+**First page:**
+- Logo in top right
+- Address block on left
+- Letter content below
+
+**Subsequent pages:**
+- Content only
+- No repeated logo
+- Consistent formatting
+
+**Last page:**
+- Contact block (if configured)
+- Continuation from previous page
+
+## Logo File Guidelines
+
+### Email Logos
+
+**PNG format:**
+- Transparent background preferred
+- 300-600px width recommended
+- RGB color mode
+- 72-150 DPI
+- Optimize file size
+
+**SVG format:**
+- Vector shapes only
+- No embedded text (convert to paths)
+- No embedded images
+- No JavaScript
+- Optimize/simplify paths
+
+### Letter Logos
+
+**SVG format (required):**
+- Single color (black) or spot color
+- No gradients
+- No text elements (paths only)
+- Suitable for black & white printing
+- Simple, clean design
+- High contrast
+
+<Warning>
+  Complex logos may not print well. Test by sending yourself a letter before using in production.
+</Warning>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Test Branding" icon="flask">
+    Send test emails/letters to yourself before using new branding in production.
+  </Card>
+  
+  <Card title="Use SVG for Letters" icon="vector-square">
+    Vector graphics scale better and print clearer than raster images.
+  </Card>
+  
+  <Card title="Keep Logos Simple" icon="shapes">
+    Simple designs work best for email and letter printing.
+  </Card>
+  
+  <Card title="Check Accessibility" icon="universal-access">
+    Ensure color contrast meets WCAG AA standards (4.5:1 minimum).
+  </Card>
+  
+  <Card title="Optimize File Size" icon="file-zipper">
+    Smaller files load faster in emails and process quicker.
+  </Card>
+  
+  <Card title="Consistent Branding" icon="palette">
+    Use the same branding across all services in your organization.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Logo won't upload">
+    Common issues:
+    - File size exceeds 2MB
+    - Wrong format (must be PNG/SVG for email, SVG for letters)
+    - SVG contains embedded images or text
+    - File is corrupted
+    
+    Solutions:
+    - Compress/optimize image
+    - Convert format
+    - Clean SVG (convert text to paths, remove embedded content)
+    - Re-export from design software
+  </Accordion>
+
+  <Accordion title="Colors don't match brand guidelines">
+    Email colors must meet accessibility requirements:
+    - Minimum contrast ratio: 4.5:1
+    - Use tools like WebAIM Contrast Checker
+    - Adjust colors if needed
+    - Request help from Notify team
+  </Accordion>
+
+  <Accordion title="Logo appears too large/small">
+    Notify automatically sizes logos:
+    - Email: Scaled to fit header area
+    - Letters: Fixed height (~25mm)
+    
+    If sizing is off:
+    - Check source file dimensions
+    - Ensure adequate whitespace around logo
+    - Contact support for custom sizing
+  </Accordion>
+
+  <Accordion title="NHS/Government option not available">
+    Check:
+    - Service organization type is set correctly
+    - Organization is NHS or central government
+    - Service is linked to organization
+    
+    If issues persist, contact platform admin.
+  </Accordion>
+
+  <Accordion title="Branding not in organization pool">
+    To add branding to pool:
+    - Create new branding (automatically added)
+    - Platform admin can add when setting branding
+    - Contact organization admin
+  </Accordion>
+
+  <Accordion title="Preview doesn't show logo">
+    If preview fails:
+    - Check browser console for errors
+    - Try different browser
+    - Verify file uploaded successfully
+    - Clear browser cache
+    - Contact support if persists
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Managing Services" href="/guides/managing-services">
+    Configure service settings and defaults
+  </Card>
+  
+  <Card title="Template Management" href="/guides/template-management">
+    Create templates that use your branding
+  </Card>
+</CardGroup>

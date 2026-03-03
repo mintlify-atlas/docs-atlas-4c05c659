@@ -1,0 +1,102 @@
+---
+title: Running Locally
+description: Run the GOV.UK Notify Admin application on your local machine
+---
+
+After completing the [local development setup](/development/setup), you can run the application locally.
+
+## Running the Flask Application
+
+Start the Flask development server:
+
+```bash
+make run-flask
+```
+
+This command:
+1. Sources the `environment.sh` file to load environment variables
+2. Runs `flask run -p 6012` to start the server on port 6012
+
+The application will be available at [http://localhost:6012](http://localhost:6012).
+
+### Auto-reload for Python Changes
+
+In development mode (with `FLASK_DEBUG=1` set in `environment.sh`), Flask automatically picks up Python code changes. You don't need to restart the server when modifying Python files.
+
+## Frontend Development
+
+For JavaScript and CSS development, run the frontend watch task in a separate terminal:
+
+```bash
+make watch-frontend
+```
+
+This command:
+1. Sources the `environment.sh` file
+2. Runs `npm run watch` to start Rollup in watch mode
+3. Automatically rebuilds assets when you modify files in `app/assets/`
+
+### Frontend Build Process
+
+The frontend build uses Rollup (configured in `rollup.config.mjs`) to:
+- Compile JavaScript from `app/assets/javascripts/`
+- Process SCSS stylesheets
+- Copy static assets from GOV.UK Frontend
+- Output bundled files to `app/static/`
+
+<Tip>
+  Run both `make run-flask` and `make watch-frontend` in separate terminal windows for the best development experience.
+</Tip>
+
+## Running with Docker
+
+If you prefer to use Docker for development:
+
+<Steps>
+  <Step title="Build the Docker image">
+    ```bash
+    make bootstrap-with-docker
+    ```
+
+    This builds the Docker image with the `test` target, tagging it as `notifications-admin`.
+  </Step>
+
+  <Step title="Run Flask in Docker">
+    ```bash
+    make run-flask-with-docker
+    ```
+
+    This executes the `./scripts/run_with_docker.sh web-local` script to run the Flask app in a container.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Port Already in Use
+
+If port 6012 is already in use, you'll see an error when starting Flask. Find and stop the process using the port:
+
+```bash
+lsof -ti:6012 | xargs kill -9
+```
+
+### Frontend Assets Not Loading
+
+If static assets aren't loading:
+
+1. Check that `app/static/` contains built files
+2. Run `npm run build` to rebuild assets
+3. Ensure `npm run watch` is running if actively developing frontend code
+
+### Environment Variables Not Set
+
+If you see errors about missing environment variables:
+
+1. Verify `environment.sh` exists in the project root
+2. Check that it contains all required variables
+3. Ensure the Makefile targets are sourcing it with `. environment.sh`
+
+## Related Documentation
+
+- [Working with Static Assets](https://github.com/alphagov/notifications-admin/blob/main/docs/static-assets.md)
+- [JavaScript Documentation](https://github.com/alphagov/notifications-manuals/wiki/JavaScript-Documentation)

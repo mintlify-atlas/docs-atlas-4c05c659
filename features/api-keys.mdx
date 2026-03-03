@@ -1,0 +1,505 @@
+---
+title: API keys
+description: Create, manage, and revoke API keys for integrating with GOV.UK Notify's API, including key types, permissions, and security best practices
+---
+
+API keys allow your applications to send notifications programmatically through the GOV.UK Notify API. Each key has a specific type that determines its permissions and sending restrictions.
+
+## API key types
+
+Notify supports three types of API keys, each with different capabilities:
+
+<Tabs>
+  <Tab title="Live keys">
+    **Type**: `normal`
+    
+    **Description**: Live – sends to anyone
+    
+    **Capabilities**:
+    - Send to any recipient
+    - No restrictions on who can receive notifications
+    - Use in production environments
+    - Count against service sending limits
+    
+    **Restrictions**:
+    - Not available in trial mode
+    - Shows disabled state with hint: "Not available because your service is in trial mode"
+    
+    **When to use**: Production applications sending to real users
+  </Tab>
+  
+  <Tab title="Team and guest list keys">
+    **Type**: `team`
+    
+    **Description**: Team and guest list – limits who you can send to
+    
+    **Capabilities**:
+    - Send to team members (users added to service)
+    - Send to guest list entries
+    - Available in trial mode and live mode
+    - Count against service sending limits
+    
+    **Restrictions**:
+    - Cannot send to recipients not on team or guest list
+    - Cannot be used to send letters
+    - Shows hint: "Cannot be used to send letters" (if service has letter permission)
+    
+    **When to use**: Testing with production-like data in live services, or any sending in trial mode
+  </Tab>
+  
+  <Tab title="Test keys">
+    **Type**: `test`
+    
+    **Description**: Test – pretends to send messages
+    
+    **Capabilities**:
+    - Simulates sending without actually delivering
+    - No messages sent to real recipients
+    - Does not count against sending limits
+    - Available in trial mode and live mode
+    
+    **Restrictions**:
+    - Notifications have test status
+    - No actual delivery occurs
+    - Cannot be used to send letters (if service has letter permission)
+    
+    **When to use**: Development and testing without sending real notifications
+  </Tab>
+</Tabs>
+
+## Creating API keys
+
+Generate new API keys for your service through the admin interface.
+
+<Steps>
+  <Step title="Navigate to API keys">
+    From your service dashboard:
+    1. Go to **API integration**
+    2. Click **API keys**
+    3. Click **Create an API key**
+    
+    **URL**: `/services/{service_id}/api/keys/create`
+  </Step>
+  
+  <Step title="Enter key details">
+    **Key name** (`key_name` field):
+    - Descriptive name to identify the key's purpose
+    - Example: "Production app", "Staging environment", "Development testing"
+    - Used in safe string format with underscores for spaces
+    
+    **Key type** (`key_type` field):
+    - Radio button selection between Live, Team and guest list, or Test
+    - Shows hints and disabled states based on service configuration
+  </Step>
+  
+  <Step title="Review permissions">
+    The form shows contextual information:
+    
+    **Trial mode services**:
+    - Live keys disabled with link to trial mode documentation
+    - Team and guest list or Test keys recommended
+    
+    **Services with letter permission**:
+    - Team and Test keys show "Cannot be used to send letters" hint
+  </Step>
+  
+  <Step title="Create and save the key">
+    Click **Continue** to generate the key.
+    
+    **Important**: The key secret is shown ONLY ONCE:
+    - Full API key displayed in copyable format
+    - Key name shown (with safe string formatting)
+    - No way to retrieve the secret again
+    
+    **Save the key immediately** - you won't be able to see it again.
+  </Step>
+</Steps>
+
+### Key creation process
+
+When you create a key (app/models/api_key.py:26-27):
+
+```python
+@classmethod
+def create(cls, service_id, name, key_type):
+    return api_key_api_client.create_api_key(
+        service_id=service_id, 
+        key_name=name, 
+        key_type=key_type
+    )
+```
+
+The API client:
+1. Generates a cryptographically secure key secret
+2. Stores the key in the database
+3. Returns the secret to the admin app (only time it's sent)
+4. Admin app displays it on the confirmation page
+
+<Warning>
+**One-time display**: The key secret is shown only once immediately after creation. If you lose it, you must revoke the key and create a new one.
+</Warning>
+
+## Managing API keys
+
+View and manage all API keys for your service.
+
+### API keys page
+
+Access at `/services/{service_id}/api/keys` to see all keys:
+
+**Display for each key**:
+- Key name
+- Key type with description:
+  - "Live – sends to anyone"
+  - "Team and guest list – limits who you can send to"
+  - "Test – pretends to send messages"
+- Revoked status (if applicable) with revocation timestamp
+- Revoke action (for active keys)
+
+**Sorting**: Keys are sorted alphabetically by name
+
+**Empty state**: "You have not created any API keys yet"
+
+### Key permissions required
+
+All API key pages require the `manage_api_keys` permission:
+
+```python
+@user_has_permissions("manage_api_keys")
+```
+
+Users without this permission cannot:
+- View API keys
+- Create new keys
+- Revoke existing keys
+
+## Revoking API keys
+
+Remove access for compromised or unused API keys.
+
+### Revocation workflow
+
+<Steps>
+  <Step title="Initiate revocation">
+    From the API keys page, click **Revoke** next to the key you want to disable.
+    
+    **URL**: `/services/{service_id}/api/keys/revoke/{key_id}`
+  </Step>
+  
+  <Step title="Confirm revocation">
+    A flash banner appears with confirmation message:
+    
+    "Are you sure you want to revoke '{key_name}'?"
+    
+    "You will not be able to use this API key to connect to GOV.UK Notify."
+    
+    The API keys list remains visible below the banner.
+  </Step>
+  
+  <Step title="Complete revocation">
+    Click the confirm button to revoke.
+    
+    The system:
+    - Calls `api_key_api_client.revoke_api_key(service_id, key_id)`
+    - Sets an expiry date on the key
+    - Shows success message: "'{key_name}' was revoked"
+    - Redirects back to API keys page
+  </Step>
+</Steps>
+
+### Revoked key display
+
+Revoked keys remain visible but show:
+- Revoked status with timestamp (e.g., "Revoked 12 November at 2:30pm")
+- No revoke action (already revoked)
+- Greyed out appearance
+
+### Immediate effect
+
+Revocation is immediate:
+- API requests with revoked key fail instantly
+- No grace period for existing requests
+- Applications using the key will get authentication errors
+
+<Warning>
+**Plan before revoking**: Ensure applications using the key are updated with a new key before revoking, or plan for downtime.
+</Warning>
+
+## API integration page
+
+The main API integration hub provides links to all API-related features.
+
+### Access
+
+**URL**: `/services/{service_id}/api`
+
+**Permission required**: `manage_api_keys`
+
+### Page sections
+
+<CardGroup cols={2}>
+  <Card title="API keys" icon="key">
+    Link to create and manage API keys for your service.
+    
+    **Destination**: `/services/{service_id}/api/keys`
+  </Card>
+  
+  <Card title="Callbacks" icon="webhook">
+    Configure delivery status callbacks and inbound SMS webhooks.
+    
+    **Destination**: Varies based on `can_have_multiple_callbacks` permission:
+    - Multiple: `/services/{service_id}/api/callbacks`
+    - Single: `/services/{service_id}/api/callbacks/delivery-status-callback`
+  </Card>
+  
+  <Card title="Guest list" icon="list">
+    Manage the list of allowed recipients for trial mode and team keys.
+    
+    **Destination**: `/services/{service_id}/api/guest-list`
+  </Card>
+  
+  <Card title="Recent API use" icon="chart-simple">
+    View recent notifications sent via API.
+    
+    **Data**: `APINotifications(service_id)` - last 50 API notifications
+  </Card>
+</CardGroup>
+
+## Guest list management
+
+Control which recipients can receive notifications in trial mode or with team keys.
+
+### Configuring the guest list
+
+<Steps>
+  <Step title="Access guest list">
+    Navigate to **API integration** → **Guest list**
+    
+    **URL**: `/services/{service_id}/api/guest-list`
+    
+    (Old URL `/services/{service_id}/api/whitelist` redirects here)
+  </Step>
+  
+  <Step title="Add recipients">
+    Enter recipients in the appropriate fields:
+    
+    **Email addresses**:
+    - One per line
+    - Validated for email format
+    - Used for email notifications
+    
+    **Phone numbers**:
+    - One per line
+    - Validated for phone format
+    - Used for SMS notifications
+  </Step>
+  
+  <Step title="Save guest list">
+    Click **Save** to update the guest list.
+    
+    **API call**: `service_api_client.update_guest_list(service_id, {...})`
+    
+    **Success message**: "Guest list updated" (with tick icon)
+  </Step>
+</Steps>
+
+### Guest list validation
+
+When sending with team keys or in trial mode:
+
+1. **Recipient check**: Each recipient validated against:
+   - Team member emails and phone numbers
+   - Guest list entries
+   - For names: Team member names
+
+2. **Validation failure**: Recipients not on list are rejected with error:
+   - "Service is in trial mode" message
+   - Link to guest list configuration
+
+3. **CSV uploads**: Each row validated, errors shown per row
+
+## Using API keys
+
+Once created, API keys are used to authenticate API requests.
+
+### Authentication format
+
+API keys are used in the `Authorization` header:
+
+```
+Authorization: ApiKey-v1 {your-key-here}
+```
+
+The key format includes:
+- Key type identifier
+- Service ID
+- Unique key secret
+
+### Key security
+
+<CardGroup cols={2}>
+  <Card title="Store securely" icon="vault">
+    Keep API keys in secure environment variables or secrets management systems. Never commit to version control.
+  </Card>
+  
+  <Card title="Use appropriate types" icon="shield-check">
+    Use test keys for development, team keys for staging, and live keys only in production.
+  </Card>
+  
+  <Card title="Rotate regularly" icon="rotate">
+    Create new keys periodically and revoke old ones to limit exposure from potential compromises.
+  </Card>
+  
+  <Card title="Monitor usage" icon="eye">
+    Check "Recent API use" section to ensure keys are being used as expected.
+  </Card>
+</CardGroup>
+
+### Trial mode restrictions
+
+In trial mode:
+
+- **Live keys**: Cannot be created (disabled in UI)
+- **Team keys**: Recommended for testing
+- **Test keys**: Available for development
+
+Attempting to create a live key in trial mode (via direct POST) results in HTTP 400 error:
+
+```python
+if current_service.trial_mode and form.key_type.data == APIKey.TYPE_NORMAL:
+    abort(400)
+```
+
+## API notifications view
+
+Monitor recent API activity from the integration page.
+
+### What's shown
+
+The "Recent API use" section displays:
+
+- Last 50 notifications sent via API
+- Template used
+- Recipient (if viewable by user)
+- Status
+- Sent timestamp
+
+**Data source**: `APINotifications(service_id)` model
+
+**Filtering**: Only shows notifications sent via API (excludes admin-sent notifications)
+
+### Permissions
+
+API notifications list respects user permissions:
+- Users with `view_activity`: See all API notifications
+- Users with only `send_messages`: Limited view
+
+## Callbacks configuration
+
+Configure webhooks to receive delivery status updates and inbound messages.
+
+### Callback types
+
+<Tabs>
+  <Tab title="Delivery status">
+    **Type**: `delivery_status`
+    
+    **Purpose**: Receive updates when notification status changes
+    
+    **Configuration**:
+    - Callback URL
+    - Bearer token for authentication
+    
+    **URL**: `/services/{service_id}/api/callbacks/delivery-status-callback`
+  </Tab>
+  
+  <Tab title="Inbound SMS">
+    **Type**: `inbound_sms`
+    
+    **Purpose**: Receive webhook when SMS message is received
+    
+    **Requirements**: Service must have `inbound_sms` permission
+    
+    **Configuration**:
+    - Callback URL
+    - Bearer token for authentication
+    
+    **URL**: `/services/{service_id}/api/callbacks/received-text-messages-callback`
+  </Tab>
+  
+  <Tab title="Returned letters">
+    **Type**: `returned_letter`
+    
+    **Purpose**: Notification when letter is returned by post office
+    
+    **Configuration**:
+    - Callback URL
+    - Bearer token for authentication
+    
+    **URL**: `/services/{service_id}/api/callbacks/returned-letters-callback`
+  </Tab>
+</Tabs>
+
+### Managing callbacks
+
+For each callback type:
+
+1. **Create**: Enter URL and bearer token, submit
+2. **Update**: Change URL or token, submit (detects change from dummy token)
+3. **Delete**: Clear URL field and submit
+
+**Dummy bearer token**: Existing tokens shown as `bearer_token_set` to hide real value
+
+## Best practices
+
+<Steps>
+  <Step title="Create descriptive key names">
+    Use names that clearly identify the purpose and environment:
+    - "Production web app"
+    - "Staging environment"
+    - "Development testing - Jane"
+    
+    This makes it easier to identify and manage keys later.
+  </Step>
+  
+  <Step title="Use minimal permissions">
+    Create keys with the least privileges needed:
+    - Development: Test keys
+    - Staging: Team and guest list keys
+    - Production: Live keys
+    
+    Never use live keys in non-production environments.
+  </Step>
+  
+  <Step title="Implement key rotation">
+    Establish a rotation schedule:
+    1. Create new API key
+    2. Update application configuration
+    3. Deploy application
+    4. Verify new key works
+    5. Revoke old key
+    
+    Rotate keys every 90 days or after team member departures.
+  </Step>
+  
+  <Step title="Monitor and audit">
+    Regularly review:
+    - Active API keys list
+    - Recent API use for unexpected activity
+    - Revoked keys that can be removed from the list (archived)
+    
+    Set up alerts for unusual API usage patterns.
+  </Step>
+  
+  <Step title="Secure key storage">
+    Never:
+    - Commit keys to version control
+    - Share keys via email or chat
+    - Store keys in application code
+    
+    Always:
+    - Use environment variables
+    - Use secrets management services
+    - Limit access to key values
+  </Step>
+</Steps>

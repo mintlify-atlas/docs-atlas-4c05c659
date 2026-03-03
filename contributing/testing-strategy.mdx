@@ -1,0 +1,649 @@
+---
+title: Testing Strategy
+description: Testing requirements and best practices for GOV.UK Notify Admin
+---
+
+## Overview
+
+Testing is mandatory for all code changes in GOV.UK Notify Admin. We maintain comprehensive test coverage across Python backend code, JavaScript frontend code, and integration points.
+
+## Test Types
+
+### Unit Tests (Python)
+
+Test individual functions and classes in isolation.
+
+### Integration Tests (Python)
+
+Test interactions between components and external services.
+
+### Frontend Tests (JavaScript)
+
+Test JavaScript modules and UI interactions using Jest.
+
+### End-to-End Tests
+
+Manual testing workflows for critical user journeys.
+
+## Python Testing
+
+### Test Framework: pytest
+
+We use pytest for all Python tests. Configuration is in `pytest.ini`:
+
+```ini
+[pytest]
+xfail_strict=true
+testpaths = tests
+log_level = 999
+env =
+    NOTIFY_ENVIRONMENT=test
+    ADMIN_CLIENT_SECRET=dev-notify-secret-key
+    API_HOST_NAME=test
+    DANGEROUS_SALT=dev-notify-salt
+    SECRET_KEY=dev-notify-secret-key
+    ZENDESK_API_KEY=test
+    REDIS_ENABLED=0
+
+filterwarnings =
+    error:Applying marks directly:pytest.RemovedInPytest4Warning
+addopts = -p no:warnings
+```
+
+### Running Python Tests
+
+```bash
+# Run all Python tests
+py.test tests/
+
+# Run tests in parallel (faster)
+py.test -n auto --maxfail=10 tests/
+
+# Run specific test file
+py.test tests/app/utils/test_user.py
+
+# Run specific test
+py.test tests/app/utils/test_user.py::test_permissions
+
+# Run with verbose output
+py.test -v tests/
+
+# Run with coverage report
+py.test --cov=app --cov-report=html tests/
+
+# Watch tests and re-run on changes
+make watch-tests
+```
+
+### Writing Python Tests
+
+#### Test Structure
+
+Organize tests to mirror the application structure:
+
+```
+tests/
+├── app/
+│   ├── models/
+│   │   ├── test_user.py
+│   │   └── test_service.py
+│   ├── utils/
+│   │   ├── test_user.py
+│   │   └── test_templates.py
+│   └── main/
+│       └── views/
+│           └── test_dashboard.py
+└── conftest.py
+```
+
+#### Test Naming
+
+- Test files: `test_<module_name>.py`
+- Test functions: `test_<description_of_behavior>`
+- Be descriptive: `test_user_cannot_access_another_service`
+
+#### Using Fixtures
+
+```python
+import pytest
+from app.models.user import User
+
+
+@pytest.fixture
+def active_user():
+    return User({
+        "id": "1234",
+        "name": "Test User",
+        "email_address": "test@example.gov.uk",
+        "state": "active",
+        "platform_admin": False,
+        "services": ["service-1"],
+        "permissions": {"service-1": ["send_messages"]},
+    })
+
+
+def test_user_can_send_messages(active_user):
+    assert active_user.has_permission_for_service(
+        "service-1",
+        "send_messages"
+    )
+```
+
+#### Parametrized Tests
+
+Test multiple scenarios with one test function:
+
+```python
+import pytest
+from werkzeug.exceptions import Forbidden
+
+
+@pytest.mark.parametrize(
+    "permissions,expected_result",
+    [
+        (["send_messages"], True),
+        (["manage_service"], True),
+        (["invalid_permission"], False),
+        ([], False),
+    ],
+)
+def test_user_permissions(permissions, expected_result, active_user):
+    active_user.permissions = {"service-1": permissions}
+    result = active_user.has_permissions(*permissions)
+    assert result == expected_result
+```
+
+#### Testing Exceptions
+
+```python
+import pytest
+from werkzeug.exceptions import Forbidden
+
+
+def test_user_without_permission_raises_403(client_request):
+    @user_has_permissions("send_messages")
+    def index():
+        pass
+    
+    with pytest.raises(Forbidden):
+        index()
+```
+
+#### Using `xfail` for Expected Failures
+
+```python
+@pytest.mark.parametrize(
+    "permissions",
+    (
+        pytest.param(
+            ["send_messages"],
+            marks=pytest.mark.xfail(raises=Forbidden),
+        ),
+        ["manage_service"],
+    ),
+)
+def test_permissions(permissions, client_request):
+    # Test will pass if Forbidden is raised for send_messages
+    # Test will pass normally for manage_service
+    pass
+```
+
+#### Mocking External Services
+
+```python
+from unittest.mock import Mock, patch
+
+
+def test_user_api_call(mocker):
+    # Mock the API client
+    mock_client = mocker.patch('app.notify_client.user_api_client')
+    mock_client.get_user.return_value = {
+        "id": "1234",
+        "name": "Test User",
+    }
+    
+    user = User.from_id("1234")
+    
+    assert user.name == "Test User"
+    mock_client.get_user.assert_called_once_with("1234")
+```
+
+#### Testing Flask Views
+
+```python
+def test_dashboard_shows_service_name(client_request, mock_get_service):
+    client_request.login(active_user)
+    page = client_request.get(
+        'main.service_dashboard',
+        service_id='service-1'
+    )
+    
+    assert page.select_one('h1').text == 'Test Service'
+```
+
+### Test Coverage Requirements
+
+- **New features**: Minimum 90% coverage
+- **Bug fixes**: Must include regression test
+- **Refactoring**: Coverage must not decrease
+
+Check coverage:
+
+```bash
+py.test --cov=app --cov-report=html tests/
+open htmlcov/index.html
+```
+
+## JavaScript Testing
+
+### Test Framework: Jest
+
+JavaScript tests use Jest with jsdom for DOM testing. Configuration in `package.json`:
+
+```json
+"jest": {
+  "setupFiles": ["<rootDir>/tests/javascripts/support/setup.js"],
+  "testEnvironmentOptions": {
+    "url": "https://www.notifications.service.gov.uk"
+  },
+  "transform": {
+    "^.+\\mjs$": "babel-jest"
+  },
+  "testMatch": ["<rootDir>/**/?(*.)(test).{js,mjs}"],
+  "testEnvironment": "jsdom"
+}
+```
+
+### Running JavaScript Tests
+
+```bash
+# Run all JavaScript tests
+npm test
+# or
+npx jest
+
+# Run specific test file
+npx jest tests/javascripts/autofocus.test.mjs
+
+# Run in watch mode
+npm run test-watch
+
+# Debug in Chrome
+npm run debug --test=autofocus.test.mjs
+```
+
+### Writing JavaScript Tests
+
+#### Test Structure
+
+```javascript
+import Autofocus from '../../app/assets/javascripts/esm/autofocus.mjs';
+import { jest } from '@jest/globals';
+import * as helpers from './support/helpers';
+
+describe('Autofocus', () => {
+  let element;
+  let focusHandler;
+
+  beforeEach(() => {
+    // Setup DOM
+    document.body.classList.add('govuk-frontend-supported');
+    document.body.innerHTML = `
+      <input id="search" data-notify-module="autofocus">
+    `;
+    
+    // Setup event listeners
+    element = document.getElementById('search');
+    focusHandler = jest.fn();
+    element.addEventListener('focus', focusHandler);
+  });
+
+  afterEach(() => {
+    // Cleanup
+    document.body.innerHTML = '';
+    element.removeEventListener('focus', focusHandler);
+  });
+
+  test('focuses element when module starts', () => {
+    new Autofocus(element);
+    expect(focusHandler).toHaveBeenCalled();
+  });
+
+  test('does not focus if window is scrolled', () => {
+    // Mock window scrolling
+    window.scrollY = 100;
+    
+    new Autofocus(element);
+    expect(focusHandler).not.toHaveBeenCalled();
+  });
+});
+```
+
+#### Testing DOM Manipulation
+
+```javascript
+import LiveSearch from '../../app/assets/javascripts/esm/live-search.mjs';
+
+describe('LiveSearch', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <input id="search" data-notify-module="live-search">
+      <ul class="govuk-list">
+        <li data-notify-module="live-search-item">Service One</li>
+        <li data-notify-module="live-search-item">Service Two</li>
+      </ul>
+    `;
+  });
+
+  test('filters items based on search input', () => {
+    const search = document.getElementById('search');
+    new LiveSearch(search);
+    
+    // Simulate user typing
+    search.value = 'One';
+    search.dispatchEvent(new Event('input'));
+    
+    const items = document.querySelectorAll('[data-notify-module="live-search-item"]');
+    expect(items[0]).toBeVisible();
+    expect(items[1]).not.toBeVisible();
+  });
+});
+```
+
+#### Mocking in Jest
+
+```javascript
+import { jest } from '@jest/globals';
+
+test('calls API on form submit', async () => {
+  const mockFetch = jest.fn(() => 
+    Promise.resolve({
+      json: () => Promise.resolve({ success: true })
+    })
+  );
+  global.fetch = mockFetch;
+  
+  // Trigger form submit
+  const form = document.querySelector('form');
+  form.submit();
+  
+  await waitFor(() => {
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/endpoint',
+      expect.objectContaining({
+        method: 'POST'
+      })
+    );
+  });
+});
+```
+
+#### Testing Event Handlers
+
+```javascript
+test('handles click events', () => {
+  const clickHandler = jest.fn();
+  const button = document.querySelector('.govuk-button');
+  
+  button.addEventListener('click', clickHandler);
+  button.click();
+  
+  expect(clickHandler).toHaveBeenCalledTimes(1);
+});
+```
+
+### Jest Configuration for GOV.UK Notify
+
+**Disabled tests are errors**:
+
+```javascript
+rules: {
+  "jest/no-disabled-tests": "error",
+  "jest/no-focused-tests": "warn",
+}
+```
+
+Don't commit tests with `.only` or `.skip`:
+
+```javascript
+// Bad - will fail CI
+test.skip('incomplete test', () => {});
+test.only('focused test', () => {});
+
+// Good - either complete the test or remove it
+test('complete test', () => {
+  expect(true).toBe(true);
+});
+```
+
+## Integration Testing
+
+### Testing with External Services
+
+Mock external API calls:
+
+```python
+def test_send_notification(mocker, client_request):
+    mock_api = mocker.patch('app.notify_client.notification_api_client')
+    mock_api.send_notification.return_value = {'id': 'notif-123'}
+    
+    page = client_request.post(
+        'main.send_notification',
+        service_id='service-1',
+        _data={'recipient': '07700900001', 'template_id': 'template-1'}
+    )
+    
+    assert mock_api.send_notification.called
+    assert 'Notification sent' in page.text
+```
+
+### Testing Database Interactions
+
+Use fixtures to set up test data:
+
+```python
+@pytest.fixture
+def sample_service(client_request):
+    return client_request.create_service(
+        service_name='Test Service',
+        user=active_user,
+    )
+
+
+def test_service_dashboard(client_request, sample_service):
+    page = client_request.get(
+        'main.service_dashboard',
+        service_id=sample_service.id
+    )
+    assert sample_service.name in page.text
+```
+
+## Test Data Management
+
+### Fixtures in `conftest.py`
+
+Shared fixtures for all tests:
+
+```python
+# tests/conftest.py
+import pytest
+from app.models.user import User
+
+
+@pytest.fixture
+def api_user_active():
+    return {
+        'id': 'user-1',
+        'name': 'Test User',
+        'email_address': 'test@example.gov.uk',
+        'state': 'active',
+        'platform_admin': False,
+        'services': [],
+        'permissions': {},
+        'organisations': [],
+    }
+
+
+@pytest.fixture
+def platform_admin_user(api_user_active):
+    api_user_active['platform_admin'] = True
+    return User(api_user_active)
+```
+
+### Factory Functions
+
+Create test data programmatically:
+
+```python
+def create_user(
+    id='user-1',
+    name='Test User',
+    email='test@gov.uk',
+    platform_admin=False,
+):
+    return User({
+        'id': id,
+        'name': name,
+        'email_address': email,
+        'platform_admin': platform_admin,
+        'state': 'active',
+        'services': [],
+        'permissions': {},
+    })
+```
+
+## Continuous Integration
+
+All tests run automatically on pull requests:
+
+1. **Python linting**: Ruff checks code style
+2. **JavaScript linting**: ESLint and Stylelint
+3. **Python tests**: pytest with coverage
+4. **JavaScript tests**: Jest
+
+### Local CI Simulation
+
+Run the full test suite locally:
+
+```bash
+# Run everything (same as CI)
+make test
+
+# This runs:
+# 1. ruff check .
+# 2. ruff format --check .
+# 3. npm run lint:scss
+# 4. npm run lint:js
+# 5. npx jest tests/javascripts
+# 6. py.test -n auto --maxfail=10 tests/
+```
+
+## Best Practices
+
+### Test Independence
+
+- Tests must not depend on execution order
+- Each test should set up its own data
+- Clean up after each test
+
+```python
+def test_example(client_request):
+    # Setup
+    user = create_test_user()
+    
+    # Execute
+    result = user.perform_action()
+    
+    # Assert
+    assert result == expected_value
+    
+    # Cleanup happens automatically via fixtures
+```
+
+### Descriptive Test Names
+
+```python
+# Good
+def test_user_without_send_permission_cannot_send_notifications():
+    pass
+
+def test_platform_admin_can_access_any_service():
+    pass
+
+# Bad
+def test_user():
+    pass
+
+def test_permissions_work():
+    pass
+```
+
+### One Assertion Per Test (When Possible)
+
+```python
+# Good - focused test
+def test_active_user_can_login():
+    assert user.is_active
+    assert user.can_login()
+
+# Better - split into two tests
+def test_active_user_has_active_state():
+    assert user.is_active
+
+def test_active_user_can_login():
+    assert user.can_login()
+```
+
+### Test Edge Cases
+
+```python
+def test_pagination_with_zero_items():
+    assert get_page(items=[], page=1) == []
+
+def test_pagination_with_exact_page_size():
+    items = list(range(50))  # Exactly one page
+    assert len(get_page(items, page=1, per_page=50)) == 50
+    assert get_page(items, page=2, per_page=50) == []
+```
+
+### Mock External Dependencies
+
+```python
+# Always mock:
+# - API calls
+# - Database queries (in unit tests)
+# - File system operations
+# - Email sending
+# - SMS sending
+
+def test_send_email_notification(mocker):
+    mock_email_client = mocker.patch('app.email_client.send')
+    
+    send_notification(user, template)
+    
+    mock_email_client.assert_called_once_with(
+        to=user.email,
+        template_id=template.id
+    )
+```
+
+## Testing Checklist
+
+Before submitting a PR:
+
+- [ ] All tests pass locally (`make test`)
+- [ ] New code has test coverage
+- [ ] Edge cases are tested
+- [ ] Error conditions are tested
+- [ ] Integration points are tested
+- [ ] No focused or skipped tests (`.only`, `.skip`)
+- [ ] Test names are descriptive
+- [ ] Mocks are used appropriately
+- [ ] Tests are independent and can run in any order
+
+## Resources
+
+- [pytest Documentation](https://docs.pytest.org/)
+- [Jest Documentation](https://jestjs.io/docs/getting-started)
+- [Testing Flask Applications](https://flask.palletsprojects.com/en/latest/testing/)
+- [GOV.UK Service Manual: Testing](https://www.gov.uk/service-manual/technology/quality-assurance-testing-your-service-regularly)

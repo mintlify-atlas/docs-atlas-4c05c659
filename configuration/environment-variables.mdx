@@ -1,0 +1,389 @@
+---
+title: Environment Variables
+description: Complete reference for all environment variables used in GOV.UK Notify Admin
+---
+
+GOV.UK Notify Admin uses environment variables to configure the application across different environments (development, test, production). This page documents all available environment variables and their purposes.
+
+## Core Application Settings
+
+### Required Variables
+
+These variables must be set in production environments:
+
+<ParamField path="ADMIN_CLIENT_SECRET" type="string" required>
+  Secret key for authenticating the admin client with the Notify API.
+  
+  **Security:** This value must be kept secure and should be unique per environment.
+</ParamField>
+
+<ParamField path="API_HOST_NAME" type="string" required>
+  URL of the Notify API backend service.
+  
+  **Default (development):** `http://localhost:6011`
+  
+  **Example:** `https://api.notifications.service.gov.uk`
+</ParamField>
+
+<ParamField path="SECRET_KEY" type="string" required>
+  Flask secret key used for securely signing session cookies and CSRF tokens.
+  
+  **Security:** Must be a cryptographically random string. Never commit this to version control.
+</ParamField>
+
+<ParamField path="DANGEROUS_SALT" type="string" required>
+  Salt value used for additional cryptographic operations with itsdangerous library.
+  
+  **Security:** Should be a unique random string per environment.
+</ParamField>
+
+### Application URLs
+
+<ParamField path="ADMIN_BASE_URL" type="string">
+  The base URL where the admin application is accessible.
+  
+  **Default:** `http://localhost:6012`
+  
+  **Production example:** `https://www.notifications.service.gov.uk`
+</ParamField>
+
+<ParamField path="HTTP_PROTOCOL" type="string">
+  HTTP protocol to use for generated URLs.
+  
+  **Default:** `http`
+  
+  **Options:** `http`, `https`
+</ParamField>
+
+### Template Preview Service
+
+<ParamField path="TEMPLATE_PREVIEW_API_HOST" type="string">
+  URL of the template preview service for rendering email and letter templates.
+  
+  **Default:** `http://localhost:6013`
+</ParamField>
+
+<ParamField path="TEMPLATE_PREVIEW_API_KEY" type="string">
+  API key for authenticating with the template preview service.
+  
+  **Default:** `my-secret-key`
+</ParamField>
+
+## Logging and Monitoring
+
+<ParamField path="NOTIFY_ENVIRONMENT" type="string">
+  The environment name for the application.
+  
+  **Default:** `development`
+  
+  **Options:** `development`, `test`, `sandbox`, `production`
+</ParamField>
+
+<ParamField path="NOTIFY_REQUEST_LOG_LEVEL" type="string">
+  Log level for HTTP request logging.
+  
+  **Default:** `INFO`
+  
+  **Options:** `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+</ParamField>
+
+<ParamField path="NOTIFY_EVENTLET_STATS" type="string">
+  Enable eventlet statistics collection.
+  
+  **Default:** `0` (disabled)
+  
+  **Options:** `0` (disabled), `1` (enabled)
+</ParamField>
+
+## Antivirus Integration
+
+<ParamField path="ANTIVIRUS_API_HOST" type="string">
+  URL of the antivirus scanning service for uploaded files.
+  
+  **Default (development):** `http://localhost:6016`
+</ParamField>
+
+<ParamField path="ANTIVIRUS_API_KEY" type="string">
+  API key for authenticating with the antivirus service.
+  
+  **Default (development):** `test-key`
+</ParamField>
+
+## Redis Configuration
+
+<ParamField path="REDIS_URL" type="string">
+  Connection URL for Redis, used for session storage and caching.
+  
+  **Default (development):** `redis://localhost:6379/0`
+  
+  **Format:** `redis://host:port/database`
+</ParamField>
+
+<ParamField path="REDIS_ENABLED" type="string">
+  Enable or disable Redis usage.
+  
+  **Default:** `1` (enabled in production), `0` in development unless explicitly set
+  
+  **Options:** `0` (disabled), `1` (enabled)
+</ParamField>
+
+<Note>
+  In production, Redis is enabled by default. In development, you must explicitly set `REDIS_ENABLED=1` to use Redis.
+</Note>
+
+## AWS S3 Bucket Configuration
+
+See [AWS Setup](/configuration/aws-setup) for detailed information on configuring AWS credentials.
+
+<ParamField path="S3_BUCKET_CSV_UPLOAD" type="string">
+  S3 bucket for storing uploaded CSV files for batch sending.
+  
+  **Default:** `local-notifications-csv-upload`
+  
+  **Development:** `development-notifications-csv-upload`
+</ParamField>
+
+<ParamField path="S3_BUCKET_CONTACT_LIST_UPLOAD" type="string">
+  S3 bucket for storing contact list files.
+  
+  **Default:** `local-contact-list`
+  
+  **Development:** `development-contact-list`
+</ParamField>
+
+<ParamField path="S3_BUCKET_LOGO_UPLOAD" type="string">
+  S3 bucket for storing email and letter branding logos.
+  
+  **Default:** `public-logos-local`
+  
+  **Development:** `public-logos-tools`
+</ParamField>
+
+<ParamField path="S3_BUCKET_MOU" type="string">
+  S3 bucket for storing Memorandum of Understanding documents.
+  
+  **Default:** `local-mou`
+  
+  **Development:** `notify.tools-mou`
+</ParamField>
+
+<ParamField path="S3_BUCKET_TRANSIENT_UPLOADED_LETTERS" type="string">
+  S3 bucket for temporarily storing uploaded letter PDFs.
+  
+  **Default:** `local-transient-uploaded-letters`
+  
+  **Development:** `development-transient-uploaded-letters`
+</ParamField>
+
+<ParamField path="S3_BUCKET_PRECOMPILED_ORIGINALS_BACKUP_LETTERS" type="string">
+  S3 bucket for backing up original precompiled letter files.
+  
+  **Default:** `local-precompiled-originals-backup-letters`
+  
+  **Development:** `development-letters-precompiled-originals-backup`
+</ParamField>
+
+<ParamField path="S3_BUCKET_LETTER_ATTACHMENTS" type="string">
+  S3 bucket for storing letter attachments.
+  
+  **Default:** `local-letter-attachments`
+  
+  **Development:** `development-letter-attachments`
+</ParamField>
+
+<ParamField path="S3_BUCKET_REPORT_REQUESTS_DOWNLOAD" type="string">
+  S3 bucket for storing generated report files for download.
+  
+  **Default:** `local-report-requests-download`
+  
+  **Development:** `development-report-requests-download`
+</ParamField>
+
+<ParamField path="S3_BUCKET_TEMPLATE_EMAIL_FILES" type="string">
+  S3 bucket for storing email template attachment files.
+  
+  **Default:** `local-template-email-files`
+  
+  **Development:** `development-template-email-files`
+</ParamField>
+
+## CDN and Assets
+
+<ParamField path="ASSET_DOMAIN" type="string">
+  Domain for serving static assets (CSS, JavaScript, images).
+  
+  **Default:** `""` (empty string, assets served from same domain)
+  
+  **Example:** `static.notifications.service.gov.uk`
+</ParamField>
+
+<ParamField path="ASSET_PATH" type="string">
+  Path or URL for static assets.
+  
+  **Default:** `/static/`
+  
+  **Production example:** `https://static.notifications.service.gov.uk/`
+</ParamField>
+
+<ParamField path="LOGO_CDN_DOMAIN" type="string">
+  CDN domain for serving logo images.
+  
+  **Default:** `static-logos.notify.tools`
+</ParamField>
+
+## UI Customization
+
+<ParamField path="HEADER_COLOUR" type="string">
+  Background color for the application header.
+  
+  **Default:** `#81878b` (grey)
+  
+  **Sandbox:** `#F499BE` (pink)
+  
+  **Format:** Hex color code
+</ParamField>
+
+## Support and Ticketing
+
+<ParamField path="ZENDESK_API_KEY" type="string">
+  API key for integrating with Zendesk support ticketing system.
+  
+  **Required for:** Submitting support tickets and feedback from the admin interface.
+</ParamField>
+
+<ParamField path="FEEDBACK_ZENDESK_SUBJECT_PREFIX_ENABLED" type="string">
+  Add environment prefix to Zendesk ticket subjects.
+  
+  **Default:** `1` (enabled)
+  
+  **Options:** `0` (disabled), `1` (enabled)
+</ParamField>
+
+## Email Validation
+
+<ParamField path="REPLY_TO_EMAIL_ADDRESS_VALIDATION_TIMEOUT" type="number">
+  Timeout in seconds for reply-to email address validation.
+  
+  **Default:** `45`
+</ParamField>
+
+## Billing Configuration
+
+<ParamField path="BILLING_DETAILS" type="string">
+  JSON string containing billing account details displayed to services.
+  
+  **Format:** JSON object with fields: `account_number`, `sort_code`, `IBAN`, `swift`, `notify_billing_email_address`
+  
+  **Default:**
+  ```json
+  {
+    "account_number": "98765432",
+    "sort_code": "01-23-45",
+    "IBAN": "GB33BUKB20201555555555",
+    "swift": "ABCDEF12",
+    "notify_billing_email_address": "generic@digital.cabinet-office.gov.uk"
+  }
+  ```
+</ParamField>
+
+## Development-Only Variables
+
+These variables are only used in development/test environments:
+
+<ParamField path="SERVER_NAME" type="string">
+  The server name/domain for the application in development.
+  
+  **Environment:** Development only
+</ParamField>
+
+<ParamField path="FLASK_APP" type="string">
+  Path to the Flask application entry point.
+  
+  **Default:** `application.py`
+  
+  **Environment:** Development only
+</ParamField>
+
+<ParamField path="FLASK_DEBUG" type="string">
+  Enable Flask debug mode with enhanced error pages.
+  
+  **Options:** `0` (disabled), `1` (enabled)
+  
+  **Environment:** Development only
+  
+  <Warning>
+    Never enable debug mode in production as it can expose sensitive information.
+  </Warning>
+</ParamField>
+
+<ParamField path="WERKZEUG_DEBUG_PIN" type="string">
+  Control the Werkzeug debugger PIN requirement.
+  
+  **Options:** `off` (disable PIN), or leave unset for default behavior
+  
+  **Environment:** Development only
+</ParamField>
+
+## Configuration Classes
+
+The application uses different configuration classes based on the `NOTIFY_ENVIRONMENT` variable:
+
+### Base Config
+Used in production. Requires all security-critical variables to be set explicitly.
+
+### Development
+Extends Base Config with development-friendly defaults:
+- `DEBUG = True`
+- `SESSION_COOKIE_SECURE = False` (allows HTTP)
+- Development S3 bucket names
+- Default API endpoints pointing to localhost
+
+### Test
+Extends Development with test-specific settings:
+- `TESTING = True`
+- `WTF_CSRF_ENABLED = False` (for easier testing)
+- Test-specific S3 bucket names
+- Mock API endpoints
+
+### Sandbox
+Extends Base Config for the sandbox environment:
+- Pink header color for visual distinction
+- HTTPS enforcement
+- Sandbox-specific S3 buckets
+
+## Environment File Example
+
+For local development, create an `environment.sh` file:
+
+```bash
+export NOTIFY_ENVIRONMENT='development'
+export FLASK_APP=application.py
+export FLASK_DEBUG=1
+export WERKZEUG_DEBUG_PIN=off
+```
+
+Source this file before running the application:
+
+```bash
+source environment.sh
+make run-flask
+```
+
+## Security Considerations
+
+<Warning>
+  **Never commit sensitive environment variables to version control.** Use environment-specific configuration management:
+  
+  - Local development: `environment.sh` (add to `.gitignore`)
+  - Production: Cloud provider secrets management (AWS Secrets Manager, etc.)
+  - CI/CD: Encrypted secrets in your CI/CD platform
+</Warning>
+
+<Note>
+  Rotate `SECRET_KEY`, `DANGEROUS_SALT`, and all API keys regularly, especially after team member departures or suspected compromise.
+</Note>
+
+## Related Documentation
+
+- [AWS Setup](/configuration/aws-setup) - AWS credentials and S3 bucket configuration
+- [Session Management](/configuration/session-management) - Session configuration and security

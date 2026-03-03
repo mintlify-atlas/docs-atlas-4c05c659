@@ -1,0 +1,534 @@
+---
+title: Data Models
+description: Data models representing domain objects in GOV.UK Notify Admin
+---
+
+GOV.UK Notify Admin uses a model layer to represent domain objects fetched from the API. These models provide a clean interface for working with data in views and templates.
+
+## Model Architecture
+
+All models inherit from `JSONModel`, which provides common functionality for working with JSON data from the API.
+
+### Base Classes
+
+#### JSONModel (`app/models/__init__.py`)
+
+The base class for all models:
+
+```python
+from notifications_utils.serialised_model import SerialisedModel
+from abc import ABC, ABCMeta, abstractmethod
+
+class JSONModel(SerialisedModel, ABC, metaclass=JSONModelMeta):
+    @property
+    @abstractmethod
+    def __sort_attribute__(self):
+        """Attribute used for sorting instances"""
+        
+    def __init__(self, _dict):
+        self._dict = _dict or {}
+        # Automatically set typed attributes from dictionary
+        for property, type_ in get_annotations(type(self)).items():
+            if property in self._dict:
+                value = self.coerce_value_to_type(self._dict[property], type_)
+                setattr(self, property, value)
+```
+
+**Features**:
+- Automatic attribute assignment from JSON data
+- Type coercion based on type hints
+- Sortable by designated attribute
+- Hashable by ID
+- Comparison operators
+
+#### ModelList
+
+Container for collections of models:
+
+```python
+class ModelList(SerialisedModelCollection):
+    def __init__(self, *args):
+        self.items = self._get_items(*args)
+```
+
+#### PaginatedModelList
+
+Supports paginated API responses:
+
+```python
+class PaginatedModelList(ModelList):
+    def __init__(self, *args, page=None, **kwargs):
+        self.current_page = int(page) if page else 1
+        response = self._get_items(*args, **kwargs, page=self.current_page)
+        self.items = response[self.response_key]
+        self.prev_page = response.get("links", {}).get("prev")
+        self.next_page = response.get("links", {}).get("next")
+```
+
+## Core Models
+
+The application includes **20 model files** representing different domain objects.
+
+### Service Model
+
+**File**: `app/models/service.py`
+
+Represents a notification service with permissions, limits, and branding.
+
+```python
+class Service(JSONModel):
+    # Core attributes
+    id: Any
+    name: str
+    active: bool
+    
+    # Limits
+    email_message_limit: int
+    international_sms_message_limit: int
+    sms_message_limit: int
+    letter_message_limit: int
+    rate_limit: int
+    
+    # Configuration
+    prefix_sms: bool
+    confirmed_unique: bool
+    count_as_live: bool
+    
+    # Metadata
+    go_live_at: datetime
+    has_active_go_live_request: bool
+    notes: str
+    
+    # Billing
+    billing_contact_email_addresses: str
+    billing_contact_names: str
+    billing_reference: str
+    purchase_order_number: str
+    
+    # Branding
+    custom_email_sender_name: str
+    email_sender_local_part: str
+    confirmed_email_sender_name: Any
+    
+    # Volumes
+    volume_email: int
+    volume_sms: int
+    volume_letter: int
+    
+    __sort_attribute__ = "name"
+    
+    TEMPLATE_TYPES = ("email", "sms", "letter")
+    
+    ALL_PERMISSIONS = TEMPLATE_TYPES + (
+        "edit_folder_permissions",
+        "email_auth",
+        "inbound_sms",
+        "international_letters",
+        "international_sms",
+        "send_files_via_ui",
+        "sms_to_uk_landlines",
+    )
+    
+    @classmethod
+    def from_id(cls, service_id):
+        return cls(service_api_client.get_service(service_id)["data"])
+```
+
+**Key Methods**:
+- `from_id(service_id)` - Load service by ID
+- `has_permission(permission)` - Check if service has permission
+- Various cached properties for relationships (users, templates, etc.)
+
+### User Model
+
+**File**: `app/models/user.py`
+
+Represents a user with authentication and permissions.
+
+```python
+class User(BaseUser, UserMixin):
+    MAX_FAILED_LOGIN_COUNT = 10
+    
+    # Identity
+    id: Any
+    name: Any
+    email_address: str
+    mobile_number: str
+    
+    # Authentication
+    auth_type: Any
+    can_use_webauthn: bool
+    current_session_id: Any
+    password_changed_at: datetime
+    
+    # Security
+    failed_login_count: int
+    email_access_validated_at: datetime
+    logged_in_at: datetime
+    state: str
+    
+    # Preferences
+    receives_new_features_email: bool
+    take_part_in_research: bool
+    
+    # Permissions
+    permissions: Any  # Dict[service_id, List[permission]]
+    organisation_permissions: Any
+    
+    __sort_attribute__ = "email_address"
+    
+    @classmethod
+    def from_id(cls, user_id):
+        return cls(user_api_client.get_user(user_id))
+    
+    @classmethod
+    def from_email_address(cls, email_address):
+        return cls(user_api_client.get_user_by_email(email_address))
+    
+    @classmethod
+    def from_email_address_and_password_or_none(cls, email_address, password):
+        user = cls.from_email_address_or_none(email_address)
+        if not user or user.locked:
+            return None
+        if not user_api_client.verify_password(user.id, password):
+            return None
+        return user
+```
+
+**Key Properties**:
+- `is_gov_user` - Whether user has government email
+- `is_authenticated` - Flask-Login requirement
+- `locked` - Whether account is locked
+- `platform_admin` - Platform admin status
+
+### Organisation Model
+
+**File**: `app/models/organisation.py`
+
+Represents a government organisation.
+
+```python
+class Organisation(JSONModel):
+    # Organisation types
+    TYPE_CENTRAL = "central"
+    TYPE_LOCAL = "local"
+    TYPE_NHS_CENTRAL = "nhs_central"
+    TYPE_NHS_LOCAL = "nhs_local"
+    TYPE_NHS_GP = "nhs_gp"
+    TYPE_EMERGENCY_SERVICE = "emergency_service"
+    TYPE_SCHOOL_OR_COLLEGE = "school_or_college"
+    TYPE_OTHER = "other"
+    
+    NHS_TYPES = (TYPE_NHS_CENTRAL, TYPE_NHS_LOCAL, TYPE_NHS_GP)
+    
+    # Attributes
+    id: Any
+    name: str
+    active: bool
+    crown: bool
+    organisation_type: Any
+    
+    # Branding
+    letter_branding_id: Any
+    email_branding_id: Any
+    
+    # Agreement
+    agreement_signed: bool
+    agreement_signed_at: datetime
+    agreement_signed_by_id: Any
+    agreement_signed_version: str
+    agreement_signed_on_behalf_of_name: str
+    agreement_signed_on_behalf_of_email_address: str
+    
+    # Configuration
+    domains: list
+    permissions: list
+    can_approve_own_go_live_requests: bool
+    
+    # Metadata
+    request_to_go_live_notes: str
+    count_of_live_services: int
+    notes: str
+    
+    # Billing
+    billing_contact_email_addresses: str
+    billing_contact_names: str
+    billing_reference: str
+    purchase_order_number: str
+    
+    __sort_attribute__ = "name"
+    
+    @classmethod
+    def from_id(cls, org_id):
+        if not org_id:
+            return cls({})
+        return cls(organisations_client.get_organisation(org_id))
+    
+    @classmethod
+    def from_domain(cls, domain):
+        return cls(organisations_client.get_organisation_by_domain(domain))
+    
+    @classmethod
+    def from_service(cls, service_id):
+        return cls(organisations_client.get_service_organisation(service_id))
+```
+
+### Notification Model
+
+**File**: `app/models/notification.py`
+
+Represents a sent notification (email, SMS, or letter).
+
+```python
+class Notification(JSONModel):
+    id: Any
+    to: str
+    recipient: str
+    template: Any
+    
+    # Timestamps
+    sent_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    
+    # Context
+    created_by: Any
+    service: Any
+    job_row_number: int
+    
+    # Template info
+    template_version: int
+    notification_type: str
+    
+    # Letter-specific
+    postage: str
+    
+    # Metadata
+    reply_to_text: str
+    client_reference: str
+    created_by_name: str
+    created_by_email_address: str
+    job_name: str
+    api_key_name: str
+    
+    __sort_attribute__ = "created_at"
+    
+    @classmethod
+    def from_id_and_service_id(cls, id, service_id):
+        return cls(notification_api_client.get_notification(service_id, str(id)))
+    
+    @property
+    def status(self):
+        return self._dict["status"]
+    
+    @property
+    def personalisation(self):
+        # Returns personalisation data with template applied
+        pass
+```
+
+**Related Classes**:
+- `Notifications(ModelList)` - Collection of notifications
+- `InboundSMSMessages(ModelList)` - Received SMS messages
+
+### Job Model
+
+**File**: `app/models/job.py`
+
+Represents a batch sending job.
+
+```python
+class Job(JSONModel):
+    id: Any
+    service: Any
+    
+    # Template info
+    template_name: str
+    template_version: int
+    template_type: Any
+    
+    # File info
+    original_file_name: str
+    notification_count: int
+    
+    # Timing
+    created_at: datetime
+    processing_started: datetime
+    scheduled_for: datetime
+    
+    # Metadata
+    created_by: Any
+    recipient: Any
+    
+    __sort_attribute__ = "original_file_name"
+    
+    @classmethod
+    def from_id(cls, job_id, service_id):
+        return cls(job_api_client.get_job(service_id, job_id)["data"])
+    
+    @property
+    def status(self):
+        return self._dict.get("job_status")
+    
+    @property
+    def cancelled(self):
+        return self.status == "cancelled"
+    
+    @property
+    def scheduled(self):
+        return self.status == "scheduled"
+```
+
+**Related Classes**:
+- `PaginatedJobs(PaginatedModelList)` - Paginated job list
+- `ImmediateJobs(ModelList)` - Non-scheduled jobs
+- `ScheduledJobs(ModelList)` - Scheduled jobs
+- `PaginatedUploads(PaginatedModelList)` - Letter uploads
+
+## Supporting Models
+
+The following models provide additional functionality:
+
+### Template Models
+
+**File**: `app/models/template_list.py`
+
+- Template collections
+- Template folders
+- Template versions
+
+### Branding Models
+
+**File**: `app/models/branding.py`
+
+- `EmailBranding` - Email branding configuration
+- `LetterBranding` - Letter branding configuration
+- `EmailBrandingPool` - Available email brandings
+- `LetterBrandingPool` - Available letter brandings
+
+### API Key Model
+
+**File**: `app/models/api_key.py`
+
+```python
+class APIKey(JSONModel):
+    TYPE_NORMAL = "normal"
+    TYPE_TEAM = "team"
+    TYPE_TEST = "test"
+```
+
+### Other Models
+
+- `ContactList` (`app/models/contact_list.py`) - Saved contact lists
+- `Event` (`app/models/event.py`) - Audit events
+- `Feedback` (`app/models/feedback.py`) - User feedback
+- `LetterRates` (`app/models/letter_rates.py`) - Postage rates
+- `ReportRequest` (`app/models/report_request.py`) - Data export requests
+- `SmsRate` (`app/models/sms_rate.py`) - SMS pricing
+- `Spreadsheet` (`app/models/spreadsheet.py`) - CSV handling
+- `TemplateEmailFile` (`app/models/template_email_file.py`) - Email attachments
+- `Token` (`app/models/token.py`) - Authentication tokens
+- `UnsubscribeRequestsReport` (`app/models/unsubscribe_requests_report.py`) - Unsubscribe data
+- `WebAuthnCredential` (`app/models/webauthn_credential.py`) - Hardware keys
+
+## Model Usage
+
+### In Views
+
+Models are typically loaded in view functions:
+
+```python
+from app.models.service import Service
+from app.models.user import User
+
+@main.route("/services/<uuid:service_id>")
+def service_dashboard(service_id):
+    service = Service.from_id(service_id)
+    user = current_user  # Flask-Login provides current user
+    
+    return render_template(
+        "dashboard.html",
+        service=service,
+        user=user,
+    )
+```
+
+### In Templates
+
+Models are accessed in Jinja2 templates:
+
+```html+jinja
+<h1>{{ service.name }}</h1>
+<p>Created by {{ user.name }} ({{ user.email_address }})</p>
+
+{% if service.has_permission('email') %}
+  <a href="{{ url_for('main.choose_template', service_id=service.id) }}">
+    Send an email
+  </a>
+{% endif %}
+```
+
+### Current Service and Organisation
+
+The application provides proxies for the current context:
+
+```python
+from app import current_service, current_organisation
+
+# In views
+if current_service.has_permission('sms'):
+    # Send SMS
+    pass
+
+# In templates - automatically available
+{{ current_service.name }}
+{{ current_org.name }}
+```
+
+These are loaded by request hooks:
+
+```python
+# app/__init__.py
+def load_service_before_request():
+    g.current_service = None
+    if service_id := request.view_args.get("service_id"):
+        g.current_service = Service.from_id(service_id)
+
+def load_organisation_before_request():
+    g.current_organisation = None
+    if org_id := request.view_args.get("org_id"):
+        g.current_organisation = Organisation.from_id(org_id)
+```
+
+## Model Collections
+
+Many models have associated collection classes:
+
+```python
+from app.models.user import Users
+
+users = Users(service_id)
+for user in users:
+    print(user.email_address)
+```
+
+## Model Caching
+
+API client methods that load models often use caching:
+
+```python
+@cache.set("service-{service_id}")
+def get_service(self, service_id):
+    return self.get(f"/service/{service_id}")
+
+@cache.delete("service-{service_id}")
+def update_service(self, service_id, **kwargs):
+    # Cache invalidated on update
+    return self.post(f"/service/{service_id}", data=kwargs)
+```
+
+## Next Steps
+
+- [API Clients](/development/api-clients) - Learn how models fetch data
+- [Flask Blueprints](/development/flask-blueprints) - See how models are used in views
+- [Application Structure](/development/application-structure) - Understand the overall architecture

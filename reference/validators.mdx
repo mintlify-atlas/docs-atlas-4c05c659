@@ -1,0 +1,841 @@
+---
+title: Validators
+description: Form validation classes for GOV.UK Notify Admin
+---
+
+Validators ensure data integrity and provide user-friendly error messages for form submissions. All validators are located in `app/main/validators.py`.
+
+## Password Validators
+
+### CommonlyUsedPassword
+
+Prevents use of commonly compromised passwords.
+
+```python
+from app.main.validators import CommonlyUsedPassword
+from wtforms import PasswordField, Form
+
+class PasswordForm(Form):
+    password = PasswordField(
+        'Password',
+        validators=[CommonlyUsedPassword()]
+    )
+```
+
+**Default Message:** "Password is in list of commonly used passwords."
+
+**Parameters:**
+- `message` (str, optional): Custom error message
+
+**Usage:**
+```python
+validator = CommonlyUsedPassword(
+    message="Choose a more secure password"
+)
+```
+
+**Note:** Checks against list in `app/main/_commonly_used_passwords.py`
+
+## Email Validators
+
+### ValidEmail
+
+Validates email address format using notifications_utils.
+
+```python
+from app.main.validators import ValidEmail
+from wtforms import StringField, Form
+
+class EmailForm(Form):
+    email = StringField(
+        'Email address',
+        validators=[ValidEmail()]
+    )
+```
+
+**Default Message:** "Enter an email address in the correct format, like name@example.gov.uk"
+
+**Parameters:**
+- `message` (str, optional): Field-level error message
+- `error_summary_message` (str, optional): Error summary message format (default: "Enter %s in the correct format")
+
+**Usage:**
+```python
+validator = ValidEmail(
+    message="Invalid email format",
+    error_summary_message="Check %s and try again"
+)
+```
+
+**Features:**
+- Validates format using `notifications_utils.recipient_validation.email_address`
+- Appends error summary messages if field has `error_summary_messages` attribute
+- Returns early if field is empty (allows optional fields)
+
+### ValidGovEmail
+
+Requires a public sector email address.
+
+```python
+from app.main.validators import ValidGovEmail
+from wtforms import StringField, Form
+
+class InviteForm(Form):
+    email = StringField(
+        'Email address',
+        validators=[ValidGovEmail()]
+    )
+```
+
+**Error Message:** Includes link to "who can use Notify" guidance
+
+**Logic:**
+- Checks email against government domains list
+- Checks email against approved organisation domains
+- Returns early if field is empty
+
+**Uses:** `app.utils.user.is_gov_user()` function
+
+## Phone Number Validators
+
+### ValidPhoneNumber
+
+Validates phone numbers with configurable options.
+
+```python
+from app.main.validators import ValidPhoneNumber
+from wtforms import StringField, Form
+
+class SMSForm(Form):
+    phone = StringField(
+        'Phone number',
+        validators=[
+            ValidPhoneNumber(
+                allow_international_sms=True,
+                allow_sms_to_uk_landlines=False
+            )
+        ]
+    )
+```
+
+**Parameters:**
+- `allow_international_sms` (bool): Allow international numbers (default: False)
+- `allow_sms_to_uk_landlines` (bool): Allow UK landlines (default: False)
+- `message` (str, optional): Custom error message
+
+**Error Messages:**
+
+Validator provides specific error messages based on error type:
+
+| Error Code | Message Format |
+|------------|----------------|
+| TOO_SHORT | "%s is too short" |
+| TOO_LONG | "%s is too long" |
+| NOT_A_UK_MOBILE | "%s does not look like a UK mobile number" |
+| UNSUPPORTED_COUNTRY_CODE | "Country code for %s not found" |
+| UNKNOWN_CHARACTER | "%s can only include: 0 1 2 3 4 5 6 7 8 9 ( ) + -" |
+| INVALID_NUMBER | "%s is not valid – double check the phone number you entered" |
+
+**Features:**
+- Uses `notifications_utils.recipient_validation.phone_number.PhoneNumber`
+- Appends error summary messages if field supports it
+- Returns early if field is empty
+
+## Template Validators
+
+### NoCommasInPlaceHolders
+
+Prevents commas in template placeholders.
+
+```python
+from app.main.validators import NoCommasInPlaceHolders
+from wtforms import TextAreaField, Form
+
+class TemplateForm(Form):
+    content = TextAreaField(
+        'Template content',
+        validators=[NoCommasInPlaceHolders()]
+    )
+```
+
+**Message:** "You cannot put commas between double brackets"
+
+**Parameters:**
+- `message` (str, optional): Custom error message
+
+**Logic:** Checks if any placeholder in `Field(field.data).placeholders` contains a comma
+
+### OnlySMSCharacters
+
+Ensures SMS template only contains compatible characters.
+
+```python
+from app.main.validators import OnlySMSCharacters
+from wtforms import TextAreaField, Form
+
+class SMSTemplateForm(Form):
+    content = TextAreaField(
+        'SMS content',
+        validators=[OnlySMSCharacters(template_type='sms')]
+    )
+```
+
+**Parameters:**
+- `template_type` (str): Template type (passed as keyword argument)
+
+**Error Message:** Lists incompatible characters with conjunction "or"
+
+Example: "You cannot use £ or € in text messages. These characters will not display properly on some phones."
+
+**Features:**
+- Uses `notifications_utils.sanitise_text.SanitiseSMS.get_non_compatible_characters()`
+- Provides helpful message about display issues
+- Lists all problematic characters found
+
+## SMS Sender ID Validators
+
+### DoesNotStartWithDoubleZero
+
+Prevents sender IDs starting with "00".
+
+```python
+from app.main.validators import DoesNotStartWithDoubleZero
+from wtforms import StringField, Form
+
+class SenderIDForm(Form):
+    sender_id = StringField(
+        'Sender ID',
+        validators=[DoesNotStartWithDoubleZero()]
+    )
+```
+
+**Message:** "Text message sender ID cannot start with 00"
+
+**Parameters:**
+- `message` (str, optional): Custom error message
+
+### IsNotAGenericSenderID
+
+Blocks generic sender IDs commonly used by spam.
+
+```python
+from app.main.validators import IsNotAGenericSenderID
+from wtforms import StringField, Form
+
+class SenderIDForm(Form):
+    sender_id = StringField(
+        'Sender ID',
+        validators=[IsNotAGenericSenderID()]
+    )
+```
+
+**Blocked IDs:** "info", "verify", "alert" (case-insensitive)
+
+**Message:** "Text message sender ID cannot be Alert, Info or Verify as those are prohibited due to usage by spam"
+
+**Parameters:**
+- `message` (str, optional): Custom error message
+
+### IsNotLikeNHSNoReply
+
+Enforces correct NHS no-reply sender ID format.
+
+```python
+from app.main.validators import IsNotLikeNHSNoReply
+
+validator = IsNotLikeNHSNoReply()
+```
+
+**Logic:**
+- If sender ID contains "nhs", "no", and "reply" (case-insensitive)
+- And is not exactly "NHSNoReply"
+- Then raises error
+
+**Message:** "Text message sender ID must match other NHS services - change it to 'NHSNoReply'"
+
+**Purpose:** Ensures consistency across NHS services
+
+### IsNotAPotentiallyMaliciousSenderID
+
+Checks sender ID against phishing protection list.
+
+```python
+from app.main.validators import IsNotAPotentiallyMaliciousSenderID
+
+validator = IsNotAPotentiallyMaliciousSenderID()
+```
+
+**Features:**
+- Checks against protected sender ID API
+- Creates Zendesk ticket if malicious sender ID detected
+- Logs warning with sender ID details
+
+**Message:** "Text message sender ID cannot be '{field.data}' - this is to protect recipients from phishing scams"
+
+**Side Effects:**
+- Creates Zendesk support ticket
+- Logs security warning
+
+### IsAUKMobileNumberOrShortCode
+
+Validates numeric sender IDs as UK mobile or shortcode.
+
+```python
+from app.main.validators import IsAUKMobileNumberOrShortCode
+from wtforms import StringField, Form
+
+class SenderIDForm(Form):
+    sender_id = StringField(
+        'Sender ID',
+        validators=[IsAUKMobileNumberOrShortCode()]
+    )
+```
+
+**Valid Formats:**
+- UK mobile: `07[0-9]{9}` (e.g., "07700900000")
+- Shortcode: `[6-8][0-9]{4}` (e.g., "60000")
+
+**Message:** "A numeric sender id should be a valid mobile number or short code"
+
+**Parameters:**
+- `message` (str, optional): Custom error message
+
+**Logic:** Only validates if field contains only numbers and dots
+
+## Content Validators
+
+### MustContainAlphanumericCharacters
+
+Requires at least two alphanumeric characters.
+
+```python
+from app.main.validators import MustContainAlphanumericCharacters
+from wtforms import StringField, Form
+
+class NameForm(Form):
+    service_name = StringField(
+        'Service name',
+        validators=[
+            MustContainAlphanumericCharacters(thing="service name")
+        ]
+    )
+```
+
+**Parameters:**
+- `thing` (str, optional): Name of field for error message
+- `message` (str, optional): DEPRECATED - use `thing` instead
+
+**Messages:**
+- With `thing`: "{Thing} must include at least 2 letters or numbers"
+- With `message`: Custom message
+- Default: "Must include at least two alphanumeric characters"
+
+**Regex:** `.*[a-zA-Z0-9].*[a-zA-Z0-9].*`
+
+### CharactersNotAllowed
+
+Blocks specific characters from input.
+
+```python
+from app.main.validators import CharactersNotAllowed
+from wtforms import StringField, Form
+
+class FilenameForm(Form):
+    filename = StringField(
+        'Filename',
+        validators=[
+            CharactersNotAllowed(
+                ['/', '\\', '<', '>'],
+                thing="filename"
+            )
+        ]
+    )
+```
+
+**Parameters:**
+- `characters_not_allowed` (iterable): Characters to block
+- `thing` (str): Name of field (default: "item")
+- `message` (str, optional): Custom field error message
+- `error_summary_message` (str, optional): Custom summary error message
+
+**Default Messages:**
+- Field: "Cannot contain {characters}"
+- Summary: "%s cannot contain {characters}"
+
+**Features:**
+- Uses `OrderedSet` for consistent ordering
+- Formats character list with "or" conjunction
+- Appends to error_summary_messages if available
+
+### StringsNotAllowed
+
+Blocks specific strings or substrings.
+
+```python
+from app.main.validators import StringsNotAllowed
+from wtforms import StringField, Form
+
+class ServiceNameForm(Form):
+    name = StringField(
+        'Service name',
+        validators=[
+            StringsNotAllowed(
+                'test', 'demo', 'example',
+                thing="service name",
+                match_on_substrings=True
+            )
+        ]
+    )
+```
+
+**Parameters:**
+- `*args` (str): Strings to block (case-insensitive)
+- `thing` (str): Name of field (default: "item")
+- `message` (str, optional): Custom field error message
+- `error_summary_message` (str, optional): Custom summary error message
+- `match_on_substrings` (bool): Match anywhere in string (default: False)
+
+**Default Messages:**
+- Exact match: "Cannot be '{string}'"
+- Substring match: "Cannot contain '{string}'"
+- Summary: "%s cannot be/contain '{string}'"
+
+**Features:**
+- Case-insensitive matching
+- Can match exact strings or substrings
+- Normalizes strings to lowercase for comparison
+
+### CannotContainURLsOrLinks
+
+Prevents URLs and markdown links in content.
+
+```python
+from app.main.validators import CannotContainURLsOrLinks
+from wtforms import TextAreaField, Form
+
+class DescriptionForm(Form):
+    description = TextAreaField(
+        'Description',
+        validators=[CannotContainURLsOrLinks(thing="description")]
+    )
+```
+
+**Parameters:**
+- `thing` (str): Name of field for error message
+
+**Message:** "{Thing} cannot contain a URL"
+
+**Logic:**
+- Checks content through `autolink_urls()` and `notify_email_markdown()`
+- If either produces `<a href=`, raises error
+- Catches URLs, markdown links, and other link formats
+
+## File Validators
+
+### CsvFileValidator
+
+Validates CSV and spreadsheet uploads.
+
+```python
+from app.main.validators import CsvFileValidator
+from wtforms import FileField, Form
+
+class UploadForm(Form):
+    file = FileField(
+        'CSV file',
+        validators=[CsvFileValidator()]
+    )
+```
+
+**Message:** "The file must be a spreadsheet that Notify can read"
+
+**Parameters:**
+- `message` (str, optional): Custom error message (not used in current implementation)
+
+**Logic:** Uses `Spreadsheet.can_handle(filename)` to check if file type is supported
+
+**Supported Formats:** CSV, XLS, XLSX, ODS, etc. (as defined in Spreadsheet model)
+
+### NoBracketsInFileName
+
+Prevents brackets in filenames.
+
+```python
+from app.main.validators import NoBracketsInFileName
+from wtforms import FileField, Form
+
+class FileUploadForm(Form):
+    file = FileField(
+        'File',
+        validators=[NoBracketsInFileName()]
+    )
+```
+
+**Message:** "File name cannot contain brackets"
+
+**Logic:** Checks for `(` or `)` in `field.data.filename`
+
+### DocumentDownloadFileValidator
+
+Validates file extensions against allowed list.
+
+```python
+from app.main.validators import DocumentDownloadFileValidator
+from wtforms import FileField, Form
+
+class DocumentForm(Form):
+    allowed_file_extensions = ['pdf', 'doc', 'docx']
+    
+    document = FileField(
+        'Document',
+        validators=[DocumentDownloadFileValidator()]
+    )
+```
+
+**Default Message:** "Not an allowed file format"
+
+**Parameters:**
+- `message` (str, optional): Custom error message
+
+**Messages:**
+- With extension: `{.ext} is not an allowed file format`
+- Without extension: Uses default message
+
+**Requirements:**
+- Form must have `allowed_file_extensions` attribute
+- Extensions checked case-insensitively
+- Leading dot stripped from extension before checking
+
+### FileIsVirusFree
+
+Scans uploaded files for viruses.
+
+```python
+from app.main.validators import FileIsVirusFree
+from wtforms import FileField, Form
+
+class UploadForm(Form):
+    file = FileField(
+        'Upload file',
+        validators=[FileIsVirusFree()]
+    )
+```
+
+**Message:** "This file contains a virus"
+
+**Features:**
+- Only runs if `ANTIVIRUS_ENABLED` config is True
+- Uses `antivirus_client.scan(field.data)`
+- Resets file pointer after scan
+- Raises `StopValidation` to prevent further processing
+
+**Behavior:**
+- Scans file data stream
+- Returns to start of file after scan (via `seek(0)`)
+- Stops validation chain if virus detected
+
+## SVG Validators
+
+Base class and implementations for SVG file validation.
+
+### NoElementInSVG (Abstract Base Class)
+
+Base class for SVG element validators.
+
+```python
+from abc import ABC, abstractmethod
+from app.main.validators import NoElementInSVG
+
+class NoScriptInSVG(NoElementInSVG):
+    element = "script"
+    message = "SVG cannot contain script elements"
+```
+
+**Abstract Properties:**
+- `element` (str): Element name to check for
+- `message` (str): Error message
+
+**Logic:**
+- Reads SVG file contents
+- Checks if `<{element}` appears in file (case-insensitive)
+- Resets file pointer after check
+
+### NoEmbeddedImagesInSVG
+
+Prevents embedded raster images in SVG files.
+
+```python
+from app.main.validators import NoEmbeddedImagesInSVG
+from wtforms import FileField, Form
+
+class LogoForm(Form):
+    logo = FileField(
+        'SVG logo',
+        validators=[NoEmbeddedImagesInSVG()]
+    )
+```
+
+**Element:** `image`
+
+**Message:** "This SVG has an embedded raster image in it and will not render well"
+
+**Purpose:** Ensures SVGs only use vector graphics for quality and performance
+
+### NoTextInSVG
+
+Prevents unconverted text in SVG files.
+
+```python
+from app.main.validators import NoTextInSVG
+from wtforms import FileField, Form
+
+class LogoForm(Form):
+    logo = FileField(
+        'SVG logo',
+        validators=[NoTextInSVG()]
+    )
+```
+
+**Element:** `text`
+
+**Message:** "This SVG has text which has not been converted to paths and may not render well"
+
+**Purpose:** Prevents font rendering issues by requiring text to be converted to vector paths
+
+## Standard WTForms Validators (Extended)
+
+### NotifyDataRequired
+
+Custom version of WTForms' DataRequired with better messaging.
+
+```python
+from app.main.validators import NotifyDataRequired
+from wtforms import StringField, Form
+
+class ServiceForm(Form):
+    name = StringField(
+        'Service name',
+        validators=[NotifyDataRequired(thing="a service name")]
+    )
+```
+
+**Parameters:**
+- `thing` (str): Name of required field
+
+**Message:** "Enter {thing}"
+
+**Example:** `NotifyDataRequired(thing="your email address")` → "Enter your email address"
+
+### NotifyInputRequired
+
+Custom version of WTForms' InputRequired with better messaging.
+
+```python
+from app.main.validators import NotifyInputRequired
+from wtforms import StringField, Form
+
+class PasswordForm(Form):
+    password = StringField(
+        'Password',
+        validators=[NotifyInputRequired(thing="a password")]
+    )
+```
+
+**Parameters:**
+- `thing` (str): Name of required field
+
+**Message:** "Enter {thing}"
+
+**Difference from DataRequired:** Checks for input submission, not just non-empty values
+
+### NotifyUrlValidator
+
+Custom version of WTForms' URL validator with better messaging.
+
+```python
+from app.main.validators import NotifyUrlValidator
+from wtforms import StringField, Form
+
+class CallbackForm(Form):
+    url = StringField(
+        'Callback URL',
+        validators=[NotifyUrlValidator(thing="a valid callback URL")]
+    )
+```
+
+**Parameters:**
+- `thing` (str): Description of URL (default: "a URL in the correct format")
+
+**Message:** "Enter {thing}"
+
+### Length
+
+Extended version of WTForms' Length with automatic message generation.
+
+```python
+from app.main.validators import Length
+from wtforms import StringField, Form
+
+class ServiceNameForm(Form):
+    name = StringField(
+        'Service name',
+        validators=[
+            Length(
+                min=3,
+                max=255,
+                thing="service name",
+                unit="characters"
+            )
+        ]
+    )
+```
+
+**Parameters:**
+- `min` (int): Minimum length (default: -1, no minimum)
+- `max` (int): Maximum length (default: -1, no maximum)
+- `thing` (str): Name of field (required unless message provided)
+- `unit` (str): Unit of measurement (default: "characters")
+- `message` (str, optional): Override automatic message
+
+**Automatic Messages:**
+- Min and max equal: "{Thing} must be {n} {unit} long"
+- Min and max both set: "{Thing} must be between {min} and {max} {unit} long"
+- Only min set: "{Thing} must be at least {min} {unit} long"
+- Only max set: "{Thing} cannot be longer than {max} {unit}"
+
+**Examples:**
+```python
+# Exact length
+Length(min=10, max=10, thing="reference number")
+# Message: "Reference number must be 10 characters long"
+
+# Range
+Length(min=3, max=50, thing="username")
+# Message: "Username must be between 3 and 50 characters long"
+
+# Maximum only
+Length(max=160, thing="SMS message")
+# Message: "SMS message cannot be longer than 160 characters"
+
+# Custom unit
+Length(min=1, max=10, thing="phone number", unit="digits")
+# Message: "Phone number must be between 1 and 10 digits long"
+```
+
+## Usage Examples
+
+### Complete Form Example
+
+```python
+from wtforms import Form, StringField, PasswordField, FileField
+from app.main.validators import (
+    NotifyDataRequired,
+    ValidEmail,
+    ValidGovEmail,
+    CommonlyUsedPassword,
+    Length,
+    CsvFileValidator,
+    FileIsVirusFree,
+)
+
+class InviteUserForm(Form):
+    email = StringField(
+        'Email address',
+        validators=[
+            NotifyDataRequired(thing="an email address"),
+            ValidEmail(),
+            ValidGovEmail(),
+        ]
+    )
+    
+    name = StringField(
+        'Full name',
+        validators=[
+            NotifyDataRequired(thing="a full name"),
+            Length(min=2, max=255, thing="full name"),
+        ]
+    )
+    
+    password = PasswordField(
+        'Password',
+        validators=[
+            NotifyDataRequired(thing="a password"),
+            Length(min=8, thing="password"),
+            CommonlyUsedPassword(),
+        ]
+    )
+
+class UploadRecipientsForm(Form):
+    file = FileField(
+        'Recipients file',
+        validators=[
+            NotifyDataRequired(thing="a file"),
+            CsvFileValidator(),
+            FileIsVirusFree(),
+        ]
+    )
+```
+
+### SMS Template Validation
+
+```python
+from wtforms import Form, StringField, TextAreaField
+from app.main.validators import (
+    NotifyDataRequired,
+    Length,
+    OnlySMSCharacters,
+    NoCommasInPlaceHolders,
+    MustContainAlphanumericCharacters,
+)
+
+class SMSTemplateForm(Form):
+    name = StringField(
+        'Template name',
+        validators=[
+            NotifyDataRequired(thing="a template name"),
+            Length(max=255, thing="template name"),
+            MustContainAlphanumericCharacters(thing="template name"),
+        ]
+    )
+    
+    content = TextAreaField(
+        'Message',
+        validators=[
+            NotifyDataRequired(thing="message content"),
+            Length(max=918, thing="message"),
+            OnlySMSCharacters(template_type='sms'),
+            NoCommasInPlaceHolders(),
+        ]
+    )
+```
+
+### Sender ID Validation
+
+```python
+from wtforms import Form, StringField
+from app.main.validators import (
+    NotifyDataRequired,
+    Length,
+    DoesNotStartWithDoubleZero,
+    IsNotAGenericSenderID,
+    IsNotLikeNHSNoReply,
+    IsNotAPotentiallyMaliciousSenderID,
+    IsAUKMobileNumberOrShortCode,
+    MustContainAlphanumericCharacters,
+)
+
+class SMSSenderForm(Form):
+    sender = StringField(
+        'Sender ID',
+        validators=[
+            NotifyDataRequired(thing="a sender ID"),
+            Length(min=3, max=11, thing="sender ID"),
+            MustContainAlphanumericCharacters(thing="sender ID"),
+            DoesNotStartWithDoubleZero(),
+            IsNotAGenericSenderID(),
+            IsNotLikeNHSNoReply(),
+            IsNotAPotentiallyMaliciousSenderID(),
+            IsAUKMobileNumberOrShortCode(),
+        ]
+    )
+```

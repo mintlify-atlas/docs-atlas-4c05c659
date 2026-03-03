@@ -1,0 +1,613 @@
+---
+title: Template Management  
+description: Complete guide to creating, editing, and organizing message templates in GOV.UK Notify Admin
+---
+
+## Overview
+
+Templates are reusable message formats for emails, text messages, and letters. This guide covers everything from creating your first template to advanced features like folders, versioning, and content management.
+
+## Template Types
+
+GOV.UK Notify supports three template types:
+
+<CardGroup cols={3}>
+  <Card title="Email" icon="envelope">
+    Send emails with subject lines, HTML formatting, and attachments
+  </Card>
+  
+  <Card title="SMS" icon="comment-sms">
+    Send text messages up to 918 characters (6 SMS fragments)
+  </Card>
+  
+  <Card title="Letter" icon="file-lines">
+    Send physical letters with custom branding and optional attachments
+  </Card>
+</CardGroup>
+
+## Creating Templates
+
+Access your templates at `/services/{service_id}/templates`.
+
+### Create Email Template
+
+<Steps>
+  <Step title="Start New Template">
+    Click "New template" then select "Email" or navigate to `/services/{service_id}/templates/add-email`.
+  </Step>
+
+  <Step title="Name Your Template">
+    Enter a descriptive template name. This is only visible to your team, not recipients.
+    
+    <Tip>
+      Use clear names like "Password reset email" or "Monthly newsletter" for easy identification.
+    </Tip>
+  </Step>
+
+  <Step title="Add Subject Line">
+    Write your email subject. You can use placeholders:
+    ```
+    Your appointment on ((date)) has been confirmed
+    ```
+  </Step>
+
+  <Step title="Write Email Content">
+    Use the content editor with formatting options:
+    
+    **Formatting syntax:**
+    - `# Heading` - Large heading
+    - `## Sub-heading` - Medium heading  
+    - `---` - Horizontal line
+    - `^ inset text` - Highlighted inset box
+    - `[link text](https://example.com)` - Hyperlinks
+    - Bullet lists with `-` or `*`
+    - Numbered lists with `1.`, `2.`, etc.
+    
+    **Personalization:**
+    ```
+    Dear ((name)),
+    
+    Your reference number is ((reference)).
+    
+    Thank you,
+    The ((team_name)) team
+    ```
+  </Step>
+
+  <Step title="Optional: Unsubscribe Link">
+    Enable "Include unsubscribe link" to add automatic one-click unsubscribe for bulk emails.
+    
+    <Note>
+      Unsubscribe links are managed automatically. Users who unsubscribe are tracked system-wide.
+    </Note>
+  </Step>
+
+  <Step title="Save Template">
+    Click "Create template". Your template is now ready to use.
+  </Step>
+</Steps>
+
+### Create SMS Template
+
+<Steps>
+  <Step title="Start New Template">
+    Select "Text message" when creating a template or go to `/services/{service_id}/templates/add-sms`.
+  </Step>
+
+  <Step title="Name and Write Content">
+    Enter template name and message content. Character counter shows:
+    - Total characters
+    - SMS fragments (1 fragment = ~160 characters)
+    - Cost estimate
+    
+    Example:
+    ```
+    Hi ((name)),
+    
+    Your appointment is at ((time)) on ((date)).
+    
+    Location: ((venue))
+    
+    Reply CONFIRM or CANCEL
+    ```
+  </Step>
+
+  <Step title="Check Character Count">
+    Stay under 918 characters (6 SMS fragments). The counter updates in real-time.
+    
+    <Warning>
+      Messages over 918 characters will be rejected. Consider shortening or using email instead.
+    </Warning>
+  </Step>
+
+  <Step title="Save Template">
+    Click "Create template" to finish.
+  </Step>
+</Steps>
+
+### Create Letter Template
+
+<Steps>
+  <Step title="Start New Template">
+    Select "Letter" when creating a template.
+    
+    <Note>
+      Creating a letter template automatically creates "Untitled letter template" with placeholder content.
+    </Note>
+  </Step>
+
+  <Step title="Edit Subject (Heading)">
+    Click "Edit" and update the subject line - this becomes the letter heading.
+  </Step>
+
+  <Step title="Write Letter Content">
+    Use the same formatting as email templates:
+    - Headings with `#` and `##`
+    - Bullet points and numbered lists
+    - Inset text with `^`
+    - Horizontal rules with `---`
+    
+    Example:
+    ```
+    # Your Tax Refund
+    
+    Dear ((first_name)) ((last_name)),
+    
+    We're writing to confirm your tax refund of ((amount)).
+    
+    ## What happens next
+    
+    The refund will be paid into your account within:
+    - 5 working days for online returns  
+    - 10 working days for paper returns
+    
+    Reference: ((reference_number))
+    ```
+  </Step>
+
+  <Step title="Configure Postage">
+    Set default postage class:
+    - **Second class** - Standard delivery
+    - **First class** - Faster delivery
+    
+    Navigate to `/services/{service_id}/templates/{template_id}/edit-postage`.
+  </Step>
+
+  <Step title="Optional: Attach Additional Pages">
+    Add extra pages as PDF at `/services/{service_id}/templates/{template_id}/attach-pages`:
+    - Upload PDF (max 2MB)
+    - Combined template + attachment must be ≤10 pages
+    - Useful for terms & conditions, maps, etc.
+  </Step>
+
+  <Step title="Optional: Welsh Translation">
+    For bilingual letters, add Welsh content:
+    1. Go to template settings
+    2. Select "Welsh then English"
+    3. Provide Welsh translations for subject and content
+    4. Letters print Welsh first, then English
+  </Step>
+</Steps>
+
+## Editing Templates
+
+### Edit Content
+
+1. Navigate to template at `/services/{service_id}/templates/{template_id}`
+2. Click "Edit template"
+3. Make changes to subject, content, or settings
+4. Click "Save"
+
+<Warning>
+  **Breaking changes** - If you modify placeholders used by the API, Notify warns you:
+  - Adding new required placeholders
+  - Removing existing placeholders
+  - Renaming placeholders
+  
+  Confirm you understand the impact before proceeding.
+</Warning>
+
+### Rename Template (Letters Only)
+
+For letter templates, rename at `/services/{service_id}/templates/{template_id}/rename`.
+
+<Note>
+  Email and SMS templates are renamed by editing the template directly.
+</Note>
+
+### Set Reply-to / Sender
+
+Override default sender for specific templates:
+
+1. Go to template page
+2. Click "Change" next to reply-to/sender  
+3. Select from your configured senders
+4. Save changes
+
+This takes you to `/services/{service_id}/templates/{template_id}/set-template-sender`.
+
+## Placeholders and Personalization
+
+### Adding Placeholders
+
+Insert dynamic content using double parentheses:
+
+```
+((placeholder_name))
+```
+
+**Rules:**
+- Use lowercase and underscores: `((user_name))` ✓
+- No spaces: `((user name))` ✗
+- No special characters except underscore
+- Must be unique within template
+
+### Conditional Content
+
+Notify doesn't support conditional logic in templates. Instead:
+- Create multiple templates for different scenarios
+- Handle logic in your application before calling the API
+- Use different templates for different user segments
+
+### Optional Placeholders
+
+All placeholders are required by default. To make content optional:
+- Provide empty string in API call: `{"middle_name": ""}`
+- Handle missing data in your application
+- Design templates to work with or without optional content
+
+## Template Folders
+
+Organize templates into folders for better management.
+
+### Creating Folders
+
+<Steps>
+  <Step title="Access Template Page">
+    Go to `/services/{service_id}/templates`.
+  </Step>
+
+  <Step title="Create Folder">
+    1. Click "Manage folders and templates"
+    2. Select "Add new folder"
+    3. Enter folder name
+    4. Click "Save"
+  </Step>
+
+  <Step title="Move Templates">
+    1. Select templates using checkboxes
+    2. Choose "Move to" from actions
+    3. Select destination folder
+    4. Confirm move
+  </Step>
+</Steps>
+
+### Folder Permissions
+
+Restrict access to specific folders:
+
+1. Navigate to folder at `/services/{service_id}/templates/folders/{folder_id}`
+2. Click "Manage folder"  
+3. At `/services/{service_id}/templates/folders/{folder_id}/manage`:
+   - Rename folder
+   - Select team members who can access
+   - Save permissions
+
+<Tip>
+  Folder permissions are inherited by templates inside. Use folders to control which team members can use sensitive templates.
+</Tip>
+
+### Deleting Folders
+
+Delete empty folders at `/services/{service_id}/templates/folders/{folder_id}/delete`:
+
+1. Click "Delete folder"
+2. Confirm deletion
+
+<Warning>
+  You must empty the folder (move templates out) before deletion. Non-empty folders cannot be deleted.
+</Warning>
+
+## Template Versioning
+
+Notify automatically versions templates when edited.
+
+### View Version History
+
+Access at `/services/{service_id}/templates/{template_id}/versions`:
+- See all previous versions
+- View what changed
+- Check who made changes
+- See when edits occurred
+
+### View Specific Version
+
+Click a version to see it at `/services/{service_id}/templates/{template_id}/version/{version_number}`:
+- Full template content
+- Metadata (created date, author)
+- Preview of that version
+
+<Note>
+  You cannot send using old versions - they're for reference only. To revert, manually recreate the old content.
+</Note>
+
+## Copying Templates
+
+### Copy Within Service
+
+<Steps>
+  <Step title="Navigate to Template">
+    Go to the template you want to copy.
+  </Step>
+
+  <Step title="Access Copy Function">
+    Click "Make a copy" or navigate to "Copy template" in settings.
+  </Step>
+
+  <Step title="Choose Destination">
+    Select folder for the copy (defaults to current folder).
+  </Step>
+
+  <Step title="Rename Copy">
+    Template copies as "[Original name] (copy)". Edit the name.
+  </Step>
+
+  <Step title="Save">
+    Click "Create template" to complete the copy.
+  </Step>
+</Steps>
+
+### Copy From Another Service
+
+<Steps>
+  <Step title="Start Copy Process">
+    From templates page, select "Copy an existing template" then choose "from another service".
+  </Step>
+
+  <Step title="Select Source Service">
+    At `/services/{service_id}/templates/copy`, choose the service to copy from.
+    
+    <Note>
+      You must be a team member of both services to copy templates between them.
+    </Note>
+  </Step>
+
+  <Step title="Browse and Select">
+    Navigate folders in source service and select the template to copy.
+  </Step>
+
+  <Step title="Review and Confirm">
+    At `/services/{service_id}/templates/copy/{template_id}`:
+    - Preview template content
+    - Choose destination folder
+    - Edit template name if needed
+    - Confirm copy
+  </Step>
+</Steps>
+
+**What gets copied:**
+- Template content and placeholders
+- Subject line (email/letter)
+- Postage settings (letters)
+- Unsubscribe link setting (email)
+- Welsh content (bilingual letters)
+- Letter attachments
+
+**What doesn't get copied:**
+- Version history
+- Send history
+- Sender/reply-to overrides (uses destination service defaults)
+
+## Deleting Templates
+
+<Steps>
+  <Step title="Navigate to Template">
+    Go to `/services/{service_id}/templates/{template_id}`.
+  </Step>
+
+  <Step title="Delete Template">
+    Click "Delete" and navigate to `/services/{service_id}/templates/{template_id}/delete`.
+  </Step>
+
+  <Step title="Confirm Deletion">
+    Review warning:
+    - "This template was last used [time ago]" or
+    - "This template has not been used within the last year"
+    
+    Confirm to permanently delete.
+  </Step>
+</Steps>
+
+<Warning>
+  Deleted templates:
+  - Cannot be recovered
+  - API calls using this template ID will fail
+  - Message history is preserved
+  - Remove API integrations before deleting
+</Warning>
+
+## Redacting Templates
+
+Hide personalized content from message history:
+
+1. Navigate to `/services/{service_id}/templates/{template_id}/redact`
+2. Confirm redaction
+3. All future messages sent with this template will have placeholder values hidden
+
+<Note>
+  Redaction applies to future messages only. Previously sent messages are not affected.
+</Note>
+
+Use cases:
+- Templates containing sensitive information
+- Compliance with data protection policies
+- Hiding personal identifiers from logs
+
+## Letter-Specific Features
+
+### Letter Attachments
+
+Add PDF attachments to letter templates:
+
+**Requirements:**
+- PDF format only
+- Max 2MB file size  
+- Combined template + attachment ≤ 10 pages
+- Content must be within printable area
+
+**Upload process:**
+1. Go to `/services/{service_id}/templates/{template_id}/attach-pages`
+2. Upload PDF
+3. Notify validates and sanitizes the file
+4. Preview shows combined letter + attachment
+5. Save to attach permanently
+
+**Managing attachments:**
+- View at template page
+- Replace by uploading new PDF
+- Remove at `/services/{service_id}/templates/{template_id}/attach-pages/edit`
+
+### Bilingual Letters (Welsh)
+
+Create Welsh/English bilingual letters:
+
+<Steps>
+  <Step title="Enable Bilingual Mode">
+    In template settings, select "Letter languages: Welsh then English".
+  </Step>
+
+  <Step title="Add Welsh Content">
+    Edit Welsh version at `/services/{service_id}/templates/{template_id}/edit/welsh`:
+    - Welsh subject line
+    - Welsh letter content
+    - Same placeholders as English version
+  </Step>
+
+  <Step title="Edit English Content">
+    Edit English version separately. Both versions must use identical placeholders.
+  </Step>
+
+  <Step title="Preview Both Versions">
+    Template preview shows:
+    - Welsh pages first
+    - English pages second
+    - Combined page count for postage
+  </Step>
+</Steps>
+
+### Letter Contact Blocks
+
+Set sender contact information for letters:
+
+1. Configure at service level: `/services/{service_id}/service-settings/letter-contacts`
+2. Override per template using "Change" on template page
+3. Appears at bottom of letter
+
+## Template Search
+
+Find templates quickly:
+
+1. Use search box on templates page (appears when 7+ templates)
+2. Search by:
+   - Template name
+   - Content keywords
+   - Folder names
+3. Filter by type: All, Email, SMS, Letter
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Clear Names" icon="tag">
+    Name templates by purpose, not content: "Password reset" not "Template 1".
+  </Card>
+  
+  <Card title="Test Before Using" icon="vial">
+    Send test messages to yourself before using templates in production.
+  </Card>
+  
+  <Card title="Keep Placeholders Simple" icon="brackets-curly">
+    Use descriptive names: `((appointment_date))` not `((d))`.
+  </Card>
+  
+  <Card title="Organize with Folders" icon="folder">
+    Group related templates: "Appointments", "Reminders", "Confirmations".
+  </Card>
+  
+  <Card title="Version Control" icon="clock-rotate-left">
+    Check version history before major edits to track changes.
+  </Card>
+  
+  <Card title="Monitor Character Count" icon="text-size">
+    For SMS, stay well under 918 characters to control costs.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Template content too long">
+    **SMS**: Maximum 918 characters (6 fragments)
+    - Shorten message
+    - Remove unnecessary words
+    - Use abbreviations
+    - Consider email instead
+    
+    **Letters**: Maximum 10 pages including attachments
+    - Reduce content
+    - Remove attachment
+    - Split into multiple letters
+  </Accordion>
+
+  <Accordion title="Cannot add template to folder">
+    Check:
+    - You have permission to access the folder
+    - Folder exists and isn't deleted
+    - You're not trying to nest folders (not supported)
+  </Accordion>
+
+  <Accordion title="Letter attachment upload fails">
+    Common issues:
+    - PDF is corrupted or password-protected
+    - File size exceeds 2MB
+    - Content outside printable area
+    - Combined pages exceed 10
+    
+    Solutions:
+    - Re-save PDF without protection
+    - Compress PDF or reduce quality
+    - Adjust margins (minimum 5mm)
+    - Remove pages from template or attachment
+  </Accordion>
+
+  <Accordion title="Placeholder errors in API">
+    If API calls fail with placeholder errors:
+    - Check placeholder names match exactly
+    - Verify all required placeholders are provided
+    - Remove extra whitespace in placeholder names
+    - Check for typos: `((naem))` vs `((name))`
+  </Accordion>
+
+  <Accordion title="Cannot delete template">
+    If deletion is blocked:
+    - Template may be in use by scheduled sends
+    - Wait for scheduled sends to complete
+    - Cancel scheduled sends first
+    - Check API integrations aren't using it
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Uploading Recipients" href="/guides/uploading-recipients">
+    Send templates to multiple recipients via CSV
+  </Card>
+  
+  <Card title="Branding" href="/guides/branding">
+    Customize template appearance and sender identity
+  </Card>
+  
+  <Card title="Managing Services" href="/guides/managing-services">
+    Configure service-level template settings
+  </Card>
+</CardGroup>

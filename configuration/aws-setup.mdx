@@ -1,0 +1,371 @@
+---
+title: AWS Setup
+description: Configure AWS credentials and S3 buckets for GOV.UK Notify Admin
+---
+
+GOV.UK Notify Admin uses Amazon Web Services (AWS) S3 for storing various types of files, including CSV uploads, logos, letters, and reports. This guide explains how to configure AWS credentials and S3 buckets.
+
+## AWS Credentials
+
+### Authentication Methods
+
+The application uses `boto3` (AWS SDK for Python) to interact with AWS services. Boto3 automatically looks for credentials in the following order:
+
+1. **Environment variables:**
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - `AWS_SESSION_TOKEN` (optional, for temporary credentials)
+
+2. **AWS credentials file** (`~/.aws/credentials`):
+   ```ini
+   [default]
+   aws_access_key_id = YOUR_ACCESS_KEY
+   aws_secret_access_key = YOUR_SECRET_KEY
+   ```
+
+3. **AWS config file** (`~/.aws/config`):
+   ```ini
+   [default]
+   region = eu-west-1
+   ```
+
+4. **IAM roles** (when running on AWS EC2 or ECS)
+
+<Note>
+  For production deployments on AWS infrastructure, IAM roles are the recommended approach as they provide automatic credential rotation and don't require managing static keys.
+</Note>
+
+### Local Development Setup
+
+For local development, you'll need AWS credentials with appropriate permissions:
+
+1. **Obtain AWS credentials** from your team's AWS administrator
+
+2. **Configure credentials** using the AWS CLI:
+   ```bash
+   aws configure
+   ```
+   
+   Or manually create `~/.aws/credentials`:
+   ```ini
+   [default]
+   aws_access_key_id = YOUR_ACCESS_KEY
+   aws_secret_access_key = YOUR_SECRET_KEY
+   ```
+
+3. **Set the region** in `~/.aws/config`:
+   ```ini
+   [default]
+   region = eu-west-1
+   ```
+
+<Warning>
+  See the [GOV.UK Notify Wiki](https://github.com/alphagov/notifications-manuals/wiki/aws-accounts#how-to-set-up-local-development) for team-specific instructions on obtaining development AWS credentials.
+</Warning>
+
+### Required IAM Permissions
+
+Your AWS credentials need the following S3 permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:HeadObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::your-bucket-name/*",
+        "arn:aws:s3:::your-bucket-name"
+      ]
+    }
+  ]
+}
+```
+
+For development, you may need permissions across multiple buckets. Adjust the `Resource` field accordingly.
+
+## AWS Region
+
+The application is configured to use the **`eu-west-1`** (Europe - Ireland) region by default:
+
+```python
+AWS_REGION = "eu-west-1"
+```
+
+This is set in `app/config.py:30` and cannot be overridden via environment variables in the current implementation.
+
+<Note>
+  All S3 buckets must be created in the `eu-west-1` region to match the application configuration.
+</Note>
+
+## S3 Bucket Configuration
+
+The application uses nine different S3 buckets for various purposes. Each bucket can be configured via environment variables.
+
+### Bucket Overview
+
+| Purpose | Environment Variable | Default (Local) | Development |
+|---------|---------------------|-----------------|-------------|
+| CSV uploads | `S3_BUCKET_CSV_UPLOAD` | `local-notifications-csv-upload` | `development-notifications-csv-upload` |
+| Contact lists | `S3_BUCKET_CONTACT_LIST_UPLOAD` | `local-contact-list` | `development-contact-list` |
+| Logos (email/letter) | `S3_BUCKET_LOGO_UPLOAD` | `public-logos-local` | `public-logos-tools` |
+| MOU documents | `S3_BUCKET_MOU` | `local-mou` | `notify.tools-mou` |
+| Transient letters | `S3_BUCKET_TRANSIENT_UPLOADED_LETTERS` | `local-transient-uploaded-letters` | `development-transient-uploaded-letters` |
+| Letter backups | `S3_BUCKET_PRECOMPILED_ORIGINALS_BACKUP_LETTERS` | `local-precompiled-originals-backup-letters` | `development-letters-precompiled-originals-backup` |
+| Letter attachments | `S3_BUCKET_LETTER_ATTACHMENTS` | `local-letter-attachments` | `development-letter-attachments` |
+| Report downloads | `S3_BUCKET_REPORT_REQUESTS_DOWNLOAD` | `local-report-requests-download` | `development-report-requests-download` |
+| Email attachments | `S3_BUCKET_TEMPLATE_EMAIL_FILES` | `local-template-email-files` | `development-template-email-files` |
+
+### Bucket Purposes
+
+#### CSV Upload Bucket
+**Environment Variable:** `S3_BUCKET_CSV_UPLOAD`
+
+Stores CSV files uploaded by users for batch sending notifications. Files are organized by service:
+
+- **Path structure:** `service-{service_id}-notify/{upload_id}.csv`
+- **Security:** Server-side encryption (AES256)
+- **Metadata:** Custom metadata tracks processing status
+- **Used in:** `app/s3_client/s3_csv_client.py:11`
+
+#### Contact List Bucket
+**Environment Variable:** `S3_BUCKET_CONTACT_LIST_UPLOAD`
+
+Stores reusable contact lists for services.
+
+#### Logo Upload Bucket
+**Environment Variable:** `S3_BUCKET_LOGO_UPLOAD`
+
+Stores email and letter branding logos:
+
+- **Email logos:** Stored at root level: `{filename}`
+- **Letter logos:** Stored at: `letters/static/images/letter-template/{filename}`
+- **Temporary logos:** Prefixed with `temp-` and tagged for automatic deletion after 7 days
+- **Permanent logos:** Copied from temporary locations without delete tags
+- **Used in:** `app/s3_client/logo_client.py:16`
+
+<Note>
+  Logo files prefixed with `temp-` are automatically cleaned up by S3 lifecycle policies after 7 days. Permanent logos must never be deleted as they may be referenced by historical email/letter templates.
+</Note>
+
+#### MOU Bucket
+**Environment Variable:** `S3_BUCKET_MOU`
+
+Stores Memorandum of Understanding documents signed by services.
+
+#### Transient Uploaded Letters
+**Environment Variable:** `S3_BUCKET_TRANSIENT_UPLOADED_LETTERS`
+
+Temporary storage for uploaded letter PDFs during processing. Files are moved to permanent storage or deleted after processing.
+
+#### Precompiled Letter Backups
+**Environment Variable:** `S3_BUCKET_PRECOMPILED_ORIGINALS_BACKUP_LETTERS`
+
+Backup storage for original precompiled letter files before processing.
+
+#### Letter Attachments
+**Environment Variable:** `S3_BUCKET_LETTER_ATTACHMENTS`
+
+Stores PDF attachments that can be included with letters.
+
+#### Report Requests Download
+**Environment Variable:** `S3_BUCKET_REPORT_REQUESTS_DOWNLOAD`
+
+Stores generated report files (CSV exports, usage reports) for user download.
+
+#### Template Email Files
+**Environment Variable:** `S3_BUCKET_TEMPLATE_EMAIL_FILES`
+
+Stores file attachments for email templates.
+
+### Creating S3 Buckets
+
+For local development, you can create buckets using the AWS CLI:
+
+```bash
+# Create all development buckets
+aws s3 mb s3://development-notifications-csv-upload --region eu-west-1
+aws s3 mb s3://development-contact-list --region eu-west-1
+aws s3 mb s3://public-logos-tools --region eu-west-1
+aws s3 mb s3://notify.tools-mou --region eu-west-1
+aws s3 mb s3://development-transient-uploaded-letters --region eu-west-1
+aws s3 mb s3://development-letters-precompiled-originals-backup --region eu-west-1
+aws s3 mb s3://development-letter-attachments --region eu-west-1
+aws s3 mb s3://development-report-requests-download --region eu-west-1
+aws s3 mb s3://development-template-email-files --region eu-west-1
+```
+
+### Bucket Encryption
+
+All buckets should have server-side encryption enabled:
+
+```bash
+aws s3api put-bucket-encryption \
+  --bucket development-notifications-csv-upload \
+  --server-side-encryption-configuration '{
+    "Rules": [{
+      "ApplyServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+      }
+    }]
+  }'
+```
+
+The application explicitly sets encryption when uploading CSV files:
+
+```python
+ServerSideEncryption="AES256"
+```
+
+### Bucket Lifecycle Policies
+
+For buckets storing temporary files (logos, transient letters), configure lifecycle policies:
+
+```json
+{
+  "Rules": [
+    {
+      "Id": "DeleteTemporaryLogos",
+      "Status": "Enabled",
+      "Filter": {
+        "Tag": {
+          "Key": "delete-after-7-days",
+          "Value": "true"
+        }
+      },
+      "Expiration": {
+        "Days": 7
+      }
+    }
+  ]
+}
+```
+
+Apply with:
+
+```bash
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket public-logos-tools \
+  --lifecycle-configuration file://lifecycle-policy.json
+```
+
+## CDN Configuration
+
+### Logo CDN
+
+**Environment Variable:** `LOGO_CDN_DOMAIN`
+
+The application serves logos via a CDN for performance:
+
+- **Default:** `static-logos.notify.tools`
+- **Purpose:** Serves logo images to email clients and letter PDFs
+- **Configuration:** Must point to a CloudFront distribution or similar CDN backed by the logo S3 bucket
+
+<Note>
+  The logo CDN domain is used in Content Security Policy headers and must be accessible from user browsers and the template preview service.
+</Note>
+
+## Testing S3 Integration
+
+The test suite uses `moto` to mock AWS S3 interactions. See test examples:
+
+- `tests/app/s3_client/test_s3_letter_upload_client.py:4`
+- `tests/app/s3_client/test_logo_client.py:3`
+
+## Troubleshooting
+
+### No AWS Credentials Found
+
+```
+botocore.exceptions.NoCredentialsError: Unable to locate credentials
+```
+
+**Solution:** Configure AWS credentials using one of the methods described above.
+
+### Access Denied
+
+```
+botocore.exceptions.ClientError: An error occurred (AccessDenied)
+```
+
+**Solutions:**
+- Verify your IAM user/role has the required S3 permissions
+- Check that bucket names match environment variable configuration
+- Ensure buckets exist in the `eu-west-1` region
+
+### Bucket Not Found
+
+```
+botocore.exceptions.ClientError: An error occurred (NoSuchBucket)
+```
+
+**Solutions:**
+- Create the missing bucket in `eu-west-1`
+- Verify environment variables are set correctly
+- Check for typos in bucket names
+
+### Wrong Region
+
+```
+botocore.exceptions.ClientError: An error occurred (PermanentRedirect)
+```
+
+**Solution:** Ensure all buckets are created in `eu-west-1` to match the application configuration.
+
+## Production Considerations
+
+<Warning>
+  **Security Best Practices:**
+  
+  - Use IAM roles instead of static access keys in production
+  - Enable bucket versioning for critical data (MOU documents, letter backups)
+  - Configure bucket policies to restrict access to specific services
+  - Enable CloudTrail logging for audit trails
+  - Use separate AWS accounts for different environments (dev, staging, prod)
+  - Regularly rotate access keys if static credentials must be used
+</Warning>
+
+### Bucket Policies
+
+Restrict bucket access to your application's IAM role:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::your-bucket-name/*",
+        "arn:aws:s3:::your-bucket-name"
+      ],
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalArn": "arn:aws:iam::ACCOUNT-ID:role/notify-admin-role"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Monitoring
+
+Set up CloudWatch alarms for:
+- High error rates on S3 operations
+- Unexpected bucket size growth
+- Failed lifecycle policy deletions
+
+## Related Documentation
+
+- [Environment Variables](/configuration/environment-variables) - All application environment variables
+- [Session Management](/configuration/session-management) - Session configuration and security

@@ -1,0 +1,246 @@
+---
+title: Testing
+description: Run Python and JavaScript tests for GOV.UK Notify Admin
+---
+
+GOV.UK Notify Admin includes comprehensive Python and JavaScript test suites.
+
+## Running All Tests
+
+To run both Python and JavaScript tests:
+
+```bash
+make test
+```
+
+This command runs:
+1. **Linting**: Checks code with `ruff check .` and `ruff format --check .`
+2. **JavaScript tests**: Runs `npm test`
+3. **Python tests**: Runs `py.test -n auto --maxfail=10 tests/`
+
+## Python Tests
+
+### Running Python Tests
+
+Run all Python tests with pytest:
+
+```bash
+py.test -n auto --maxfail=10 tests/
+```
+
+Options used:
+- `-n auto`: Runs tests in parallel using all available CPU cores
+- `--maxfail=10`: Stops after 10 test failures
+- `tests/`: Test directory path
+
+### Running Specific Python Tests
+
+Run a specific test file:
+
+```bash
+py.test tests/app/test_user.py
+```
+
+Run a specific test function:
+
+```bash
+py.test tests/app/test_user.py::test_user_creation
+```
+
+Run tests matching a pattern:
+
+```bash
+py.test -k "test_login"
+```
+
+### Watch Mode for Python Tests
+
+Automatically re-run tests when files change:
+
+```bash
+make watch-tests
+```
+
+This uses `pytest-watch` (ptw) with `pytest --testmon -n auto` to intelligently run only affected tests.
+
+### Python Test Configuration
+
+Tests are configured in `pytest.ini`:
+
+```ini
+[pytest]
+xfail_strict=true
+testpaths = tests
+log_level = 999
+env =
+    NOTIFY_ENVIRONMENT=test
+    ADMIN_CLIENT_SECRET=dev-notify-secret-key
+    API_HOST_NAME=test
+    DANGEROUS_SALT=dev-notify-salt
+    SECRET_KEY=dev-notify-secret-key
+    ZENDESK_API_KEY=test
+    REDIS_ENABLED=0
+```
+
+Key settings:
+- **xfail_strict**: Strict mode for expected failures
+- **testpaths**: Root directory for test discovery
+- **env**: Environment variables automatically set for all tests
+
+### Test Structure
+
+Python tests are located in `tests/` with the following structure:
+
+- `tests/app/` - Application-level tests
+- `tests/conftest.py` - Pytest fixtures and configuration
+- `tests/__init__.py` - Test utilities and helpers
+
+## JavaScript Tests
+
+### Running JavaScript Tests
+
+Run all JavaScript tests:
+
+```bash
+npm test
+```
+
+This runs:
+1. SCSS linting: `stylelint "**/*.scss"`
+2. JavaScript linting: `eslint`
+3. Jest tests: `node --experimental-vm-modules node_modules/.bin/jest tests/javascripts`
+
+### Running Jest Directly
+
+Run Jest tests only:
+
+```bash
+npx jest
+```
+
+Run a specific test file:
+
+```bash
+npx jest tests/javascripts/someTest.test.js
+```
+
+### Watch Mode for JavaScript Tests
+
+Automatically re-run tests when files change:
+
+```bash
+npm run test-watch
+```
+
+This runs `jest --watch tests/javascripts` and provides an interactive menu to filter tests.
+
+### Debugging JavaScript Tests
+
+Debug a test in Chrome DevTools:
+
+```bash
+npm run debug --test=someTest.test.js
+```
+
+This runs `node --inspect-brk node_modules/.bin/jest --runInBand` with the specified test file.
+
+Steps:
+1. Run the debug command
+2. Open `chrome://inspect` in Chrome
+3. Click "inspect" on the Node process
+4. Use Chrome DevTools to set breakpoints and debug
+
+### JavaScript Test Configuration
+
+Jest is configured in `package.json`:
+
+```json
+"jest": {
+  "setupFiles": [
+    "<rootDir>/tests/javascripts/support/setup.js"
+  ],
+  "testEnvironmentOptions": {
+    "url": "https://www.notifications.service.gov.uk"
+  },
+  "transform": {
+    "^.+\\mjs$": "babel-jest"
+  },
+  "testMatch": [
+    "<rootDir>/**/?(*.)(test).{js,mjs}"
+  ],
+  "testEnvironment": "jsdom"
+}
+```
+
+Key settings:
+- **testEnvironment**: Uses jsdom to simulate browser environment
+- **setupFiles**: Runs `tests/javascripts/support/setup.js` before tests
+- **testMatch**: Finds files matching `*.test.js` or `*.test.mjs`
+
+### Test Structure
+
+JavaScript tests are located in `tests/javascripts/` and test files use the `.test.js` or `.test.mjs` extension.
+
+## Linting
+
+### Python Linting
+
+Check Python code style with Ruff:
+
+```bash
+make lint
+```
+
+This runs:
+- `ruff check .` - Checks for style issues
+- `ruff format --check .` - Checks code formatting
+
+Auto-fix issues:
+
+```bash
+ruff check --fix .
+```
+
+Fix import ordering:
+
+```bash
+make fix-imports
+```
+
+### JavaScript/SCSS Linting
+
+The `npm test` command includes linting, but you can run linters individually:
+
+Lint SCSS:
+
+```bash
+npm run lint:scss
+```
+
+Lint JavaScript:
+
+```bash
+npm run lint:js
+```
+
+## Running Tests in Docker
+
+Run the full test suite in Docker:
+
+```bash
+make test-with-docker
+```
+
+This executes `./scripts/run_with_docker.sh make test` to run tests in a containerized environment.
+
+## Continuous Integration
+
+The test suite runs automatically in CI when you push changes or create a pull request. Ensure all tests pass locally before pushing:
+
+```bash
+make test
+```
+
+<Tip>
+  Use watch mode during development to get instant feedback on test failures as you code.
+</Tip>

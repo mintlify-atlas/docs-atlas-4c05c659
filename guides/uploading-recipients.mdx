@@ -1,0 +1,487 @@
+---
+title: Uploading Recipients
+description: Guide to uploading CSV files and sending bulk messages in GOV.UK Notify Admin
+---
+
+## Overview
+
+GOV.UK Notify allows you to send messages to multiple recipients by uploading CSV files. This guide covers CSV formatting, contact lists, batch sending, and troubleshooting upload issues.
+
+## CSV File Requirements
+
+### Supported Formats
+
+Notify accepts:
+- `.csv` - Comma-separated values
+- `.xlsx` - Microsoft Excel (modern format)
+- `.xls` - Microsoft Excel (legacy format)  
+- `.ods` - OpenDocument spreadsheet
+- `.tsv` - Tab-separated values
+- `.txt` - Plain text with delimiters
+
+<Note>
+  File size limit: 2MB. Maximum 50,000 rows for batch sends.
+</Note>
+
+### Column Structure
+
+Your CSV must have:
+1. **Header row** - Column names (case-insensitive)
+2. **Data rows** - Recipient information and personalization
+
+#### Email Template CSVs
+
+```csv
+email address,name,reference
+user@example.gov.uk,Alice Smith,ACC-001
+bob@agency.gov.uk,Bob Jones,ACC-002
+```
+
+Required column:
+- `email address` - Valid email address
+
+Optional:
+- Template placeholder columns (e.g., `name`, `date`)
+- `reference` - Your own reference identifier
+
+#### SMS Template CSVs
+
+```csv
+phone number,name,appointment_time
+07700900123,Alice Smith,3pm on Monday
+07700900456,Bob Jones,10am on Tuesday
+```
+
+Required column:
+- `phone number` - UK mobile number (or international if enabled)
+
+Formats accepted:
+- `07700900123`
+- `+447700900123`
+- `0044 7700 900 123`
+- `+44 (0) 7700 900123`
+
+#### Letter Template CSVs
+
+```csv
+address line 1,address line 2,address line 3,address line 4,address line 5,address line 6,address line 7,name
+Alice Smith,123 Example Street,,,London,,SW1A 1AA,
+Bob Jones,Department of Examples,10 Whitehall,,,London,SW1A 2AA,
+```
+
+Required columns (first 7 columns must be address lines):
+- `address line 1` - Recipient name or first line
+- `address line 2` - Building/street
+- `address line 3` - Town/city or postcode
+- `address line 4` - (optional)
+- `address line 5` - (optional)  
+- `address line 6` - (optional)
+- `address line 7` - Postcode (if not in line 3)
+
+<Warning>
+  At minimum, you need addressee name (line 1), street (line 2), and postcode (line 3 or 7).
+</Warning>
+
+### Placeholder Columns
+
+Add columns for template personalization:
+
+```csv
+email address,name,due_date,amount
+user@example.gov.uk,Alice,15 January,£50.00
+```
+
+If your template contains `((name))`, `((due_date))`, and `((amount))`, include those as columns.
+
+<Tip>
+  Column names must exactly match placeholder names (case-insensitive). Spaces and underscores are interchangeable.
+</Tip>
+
+## Downloading Example CSVs
+
+Get a correctly formatted example:
+
+1. Navigate to your template
+2. Click "Send messages"
+3. Download the example CSV from `/services/{service_id}/send/{template_id}.csv`
+
+The example includes:
+- All required columns for that template type
+- Template placeholder columns
+- Sample data in the correct format
+
+## Sending Messages from CSV
+
+<Steps>
+  <Step title="Navigate to Template">
+    Go to your template at `/services/{service_id}/templates/{template_id}` and click "Send".
+  </Step>
+
+  <Step title="Upload CSV">
+    At `/services/{service_id}/send/{template_id}/csv`:
+    - Click "Choose file" or drag and drop
+    - Select your CSV file
+    - Click "Continue"
+    
+    Notify validates your file immediately for:
+    - File format issues
+    - Virus scanning
+    - File size limits
+  </Step>
+
+  <Step title="Review Recipients">
+    Notify shows you:
+    - Total number of recipients
+    - First 50 rows as a preview
+    - Any errors or warnings
+    - Personalization preview for first recipient
+    
+    Error types displayed:
+    - Invalid email addresses or phone numbers
+    - Missing required columns  
+    - Empty recipient fields
+    - Trial mode restrictions
+  </Step>
+
+  <Step title="Choose Sender (if applicable)">
+    If your service has multiple senders:
+    - Select reply-to email address (for email templates)
+    - Select SMS sender ID (for SMS templates)
+    - Choose letter contact block (for letter templates)
+  </Step>
+
+  <Step title="Send Now or Schedule">
+    Options:
+    - **Send now** - Messages sent immediately
+    - **Schedule for later** - Choose date and time (up to 7 days ahead)
+    
+    <Note>
+      Scheduled sends use midnight, midday, or hourly slots in your local timezone.
+    </Note>
+  </Step>
+
+  <Step title="Confirm and Send">
+    Review the summary:
+    - Recipient count
+    - Template preview  
+    - Send time
+    - Sender details
+    
+    Click "Send [X] messages" to confirm.
+  </Step>
+</Steps>
+
+## Contact Lists
+
+Contact lists are reusable CSV files stored in Notify for repeated sends.
+
+### Creating Contact Lists
+
+<Steps>
+  <Step title="Upload CSV">
+    Navigate to `/services/{service_id}/upload-contact-list` and upload a CSV containing only recipient addresses.
+    
+    Format:
+    ```csv
+    email address
+    user1@example.gov.uk
+    user2@example.gov.uk  
+    user3@example.gov.uk
+    ```
+    
+    or
+    
+    ```csv
+    phone number
+    07700900123
+    07700900456
+    07700900789
+    ```
+  </Step>
+
+  <Step title="Validate List">
+    Notify checks at `/services/{service_id}/check-contact-list/{upload_id}`:
+    
+    **Requirements:**
+    - Only ONE column (email address OR phone number)
+    - Maximum 50,000 rows
+    - All addresses must be valid
+    - In trial mode, must be team members or guest list
+    
+    **Common errors:**
+    - Multiple columns (not allowed)
+    - Empty rows
+    - Invalid addresses
+    - Mixed email and phone numbers
+  </Step>
+
+  <Step title="Save Contact List">
+    Give your list a name and save it. The list becomes available for future sends.
+  </Step>
+</Steps>
+
+### Using Contact Lists
+
+Send to a saved list:
+
+1. Go to **Uploads** page
+2. Click on your contact list
+3. Click "Send messages"
+4. Choose a template
+5. Confirm and send
+
+<Tip>
+  Contact lists are perfect for regular communications like newsletters, weekly updates, or standing notifications.
+</Tip>
+
+### Managing Contact Lists
+
+At `/services/{service_id}/contact-list/{contact_list_id}`:
+
+- **View** - See recipients and send history
+- **Download** - Export as CSV
+- **Delete** - Remove the contact list
+
+<Warning>
+  Deleting a contact list doesn't affect previously sent messages, only future sends.
+</Warning>
+
+## Uploading Letters (Precompiled PDFs)
+
+Send pre-designed letter PDFs without using templates.
+
+### Upload Requirements
+
+<Steps>
+  <Step title="Prepare PDF">
+    Your PDF must:
+    - Be a valid PDF document
+    - Not be password-protected or encrypted
+    - Have readable text (not be corrupted)
+    - Meet Notify's letter specifications
+  </Step>
+
+  <Step title="Upload PDF">
+    Go to `/services/{service_id}/upload-letter`:
+    - Choose your PDF file (max 2MB)
+    - Upload for validation
+    
+    <Note>
+      Notify sanitizes the PDF to ensure it meets postal requirements.
+    </Note>
+  </Step>
+
+  <Step title="Preview and Validate">
+    At `/services/{service_id}/preview-letter/{file_id}`, Notify:
+    - Extracts the address from your PDF
+    - Counts pages (max 10 pages)
+    - Checks printable area
+    - Detects invalid content
+    
+    **Validation errors:**
+    - `content-outside-printable-area` - Content too close to edges
+    - Invalid address format
+    - Corrupted PDF
+  </Step>
+
+  <Step title="Choose Postage">
+    Select postage class:
+    - **Second class** - 2-3 working days
+    - **First class** - 1-2 working days  
+    - **Europe** - International European addresses
+    - **Rest of world** - International non-European addresses
+  </Step>
+
+  <Step title="Send Letter">
+    Confirm to submit for printing. Letters are processed and posted according to the daily print deadline.
+  </Step>
+</Steps>
+
+### Viewing Uploaded Letters
+
+See all uploaded letters at `/services/{service_id}/uploaded-letters/{print_day}`:
+- Grouped by print day
+- Shows recipient preview
+- Links to individual letter status
+- Pagination for large batches
+
+## CSV Validation Errors
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Missing columns">
+    **Error**: Required column not found
+    
+    **Solution**:
+    - Ensure header row has exact column names
+    - Check spelling: `email address` not `email`
+    - For letters: All 7 address line columns required
+  </Accordion>
+
+  <Accordion title="Invalid email addresses">
+    **Error**: Row X has an invalid email
+    
+    **Solution**:
+    - Check for typos: `user@examplecom` should be `user@example.com`
+    - Remove spaces: `user @example.com` should be `user@example.com`
+    - Validate domain exists
+  </Accordion>
+
+  <Accordion title="Invalid phone numbers">
+    **Error**: Row X has an invalid phone number
+    
+    **Solution**:
+    - Use UK format: `07700900123` or `+447700900123`
+    - Enable international SMS for overseas numbers
+    - Remove letters: `Mobile` should be a number
+    - Check for extra characters
+  </Accordion>
+
+  <Accordion title="Too many columns">
+    **Error**: Contact lists can only have one column
+    
+    **Solution**:
+    For contact lists, include ONLY the recipient column:
+    - Either `email address` OR `phone number`
+    - Remove all other columns
+    - Use regular CSV upload for templates with personalization
+  </Accordion>
+
+  <Accordion title="File too large">
+    **Error**: File exceeds 2MB or 50,000 rows
+    
+    **Solution**:
+    - Split into multiple files
+    - Remove unnecessary columns
+    - Check for hidden data in spreadsheet
+    - Export as plain CSV to reduce size
+  </Accordion>
+
+  <Accordion title="Empty recipient field">
+    **Error**: Row X has a missing email/phone/address
+    
+    **Solution**:
+    - Fill in all required fields
+    - Remove rows with empty recipients
+    - Check for whitespace-only cells
+  </Accordion>
+
+  <Accordion title="Trial mode restrictions">
+    **Error**: Can only send to team members in trial mode
+    
+    **Solution**:
+    - Add recipients to your team or guest list
+    - Request to go live
+    - Use only team member addresses for testing
+  </Accordion>
+
+  <Accordion title="File encoding issues">
+    **Error**: Cannot read CSV file
+    
+    **Solution**:
+    - Save as UTF-8 encoding
+    - Re-save from spreadsheet software
+    - Check for special characters
+    - Try different file format (.xlsx instead of .csv)
+  </Accordion>
+</AccordionGroup>
+
+## Letter Upload Errors
+
+### PDF Validation Issues
+
+**Cannot read PDF**
+- PDF is corrupted
+- File is not actually a PDF
+- Solution: Re-save or recreate the PDF
+
+**Content outside printable area**  
+- Content too close to page edges
+- Margin requirements: 5mm minimum
+- Solution: Adjust margins in design software
+
+**Invalid address**
+- Address cannot be parsed
+- Missing postcode
+- Solution: Ensure clear address block on first page
+
+**Too many pages**
+- Exceeds 10 page maximum
+- Solution: Split into multiple letters or reduce content
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Test with Small Batches" icon="flask">
+    Upload 5-10 rows first to verify formatting before sending to thousands.
+  </Card>
+  
+  <Card title="Use Consistent Formatting" icon="table">
+    Keep phone numbers in same format throughout CSV for better validation.
+  </Card>
+  
+  <Card title="Download Examples" icon="download">
+    Always start with Notify's example CSV for your template type.
+  </Card>
+  
+  <Card title="Validate Addresses" icon="check">
+    Clean your data before upload - remove duplicates and invalid entries.
+  </Card>
+  
+  <Card title="Save Contact Lists" icon="address-book">
+    For recurring sends, save contact lists instead of re-uploading CSVs.
+  </Card>
+  
+  <Card title="Schedule Wisely" icon="clock">
+    Schedule large batches during off-peak hours to avoid rate limiting.
+  </Card>
+</CardGroup>
+
+## Performance Tips
+
+### Large File Uploads
+
+For files with 10,000+ recipients:
+
+1. **Split files** - Break into 5,000-row chunks
+2. **Remove formatting** - Use plain CSV, not Excel with styling  
+3. **Minimize columns** - Only include required fields and placeholders
+4. **Schedule overnight** - Spread large sends across time
+
+### Retry Strategy
+
+If validation fails:
+
+1. Fix errors shown in red
+2. Re-upload corrected file
+3. Notify remembers your sender selection
+4. Previous uploads are stored for reference
+
+## Viewing Upload History
+
+Access all uploads at `/services/{service_id}/uploads`:
+
+- **Recent uploads** - CSVs and contact lists
+- **Scheduled jobs** - Future sends  
+- **Sent batches** - Completed sends with stats
+- **Contact lists** - Saved recipient lists
+
+Each upload shows:
+- File name
+- Recipient count
+- Send status
+- Timestamp
+- Template used
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Template Management" href="/guides/template-management">
+    Create templates for CSV sends
+  </Card>
+  
+  <Card title="Managing Services" href="/guides/managing-services">
+    Configure daily limits and settings
+  </Card>
+</CardGroup>

@@ -1,0 +1,465 @@
+---
+title: Dashboard and reporting
+description: Monitor notification activity, track delivery rates, analyze template usage, and export data from the GOV.UK Notify Admin dashboard
+---
+
+The GOV.UK Notify Admin dashboard provides real-time visibility into your notification activity, delivery performance, and service usage.
+
+## Service dashboard
+
+The main dashboard (`/services/{service_id}`) shows an overview of your notification activity.
+
+### Dashboard sections
+
+The dashboard uses AJAX-based partials that auto-refresh to show live data:
+
+<Tabs>
+  <Tab title="Last 7 days">
+    **Activity totals** - Shows counts for the last 7 days:
+    
+    - **Emails sent**: Total emails with delivery stats
+    - **Text messages sent**: Total SMS with delivery stats
+    - **Letters sent**: Total letters with delivery stats
+    
+    Each total shows:
+    - Count of sent notifications
+    - Count of failed notifications
+    - Failure percentage
+    - Warning indicator if failure rate exceeds 3%
+    
+    Click any total to view filtered notification list.
+  </Tab>
+  
+  <Tab title="Template statistics">
+    **Most used templates** - Shows template usage for the last 7 days:
+    
+    - Template name and type (email/SMS/letter)
+    - Message count sent
+    - Visual bar chart (scaled to most-used template)
+    - Links to individual templates
+    
+    Sorted by count (highest first), excludes cancelled notifications.
+  </Tab>
+  
+  <Tab title="Inbox">
+    **Received text messages** - For services with inbound SMS enabled:
+    
+    - Recent inbound messages
+    - Sender phone number
+    - Message content
+    - Received timestamp
+    - Link to full conversation
+    
+    Only shown if service has `inbound_sms` permission.
+  </Tab>
+  
+  <Tab title="Upcoming">
+    **Scheduled jobs** - Shows jobs scheduled for future sending:
+    
+    - Template name
+    - Scheduled date/time
+    - Recipient count
+    - Option to cancel
+  </Tab>
+</Tabs>
+
+### Live updates
+
+The dashboard uses JSON endpoints to update sections without full page reload:
+
+- **Update URL**: `/services/{service_id}/dashboard.json`
+- **Sections updated**: `totals`, `template-statistics`, `inbox`, `upcoming`
+- **Initial load**: Shows loading placeholders (`_totals-lazy.html`, `template-statistics-lazy.html`)
+
+<Note>
+The dashboard only appears for users with `view_activity` permission. Users without this permission are redirected to the template chooser.
+</Note>
+
+## Notifications page
+
+View and search all notifications sent from your service.
+
+### Accessing notifications
+
+Navigate to `/services/{service_id}/notifications` to see all notifications, or filter by type:
+
+- `/services/{service_id}/notifications/email` - Email notifications only
+- `/services/{service_id}/notifications/sms` - SMS notifications only
+- `/services/{service_id}/notifications/letter` - Letter notifications only
+
+### Status filtering
+
+Filter notifications by delivery status:
+
+<Tabs>
+  <Tab title="Total">
+    Shows all notifications regardless of status (sending, delivered, failed).
+    
+    **Query parameter**: `status=sending,delivered,failed`
+  </Tab>
+  
+  <Tab title="Delivering">
+    Notifications currently being processed or in transit.
+    
+    Calculated as: `requested - delivered - failed`
+    
+    **Query parameter**: `status=sending`
+  </Tab>
+  
+  <Tab title="Delivered">
+    Successfully delivered notifications.
+    
+    **Query parameter**: `status=delivered`
+  </Tab>
+  
+  <Tab title="Failed">
+    Notifications that failed to deliver.
+    
+    **Query parameter**: `status=failed`
+  </Tab>
+</Tabs>
+
+Each filter shows the count and updates dynamically.
+
+### Search functionality
+
+Search notifications by:
+
+- **Email**: Email address
+- **SMS**: Phone number
+- **Letter**: Postal address or file name
+- **All types**: Reference (if API keys exist for the service)
+
+The search:
+1. Stores the search term in Redis with a hash (7-day TTL)
+2. Uses the hash in URLs to avoid exposing personal data
+3. Returns cached search results when navigating back
+
+**Implementation details** (app/main/views/dashboard.py:89-108):
+```python
+def cache_search_query(search_term, service_id, search_query_hash):
+    # Caches search term using SHA512 hash
+    # Returns hash for URL and cached search term
+    # 7 day TTL (SEVEN_DAYS_TTL constant)
+```
+
+### Data retention
+
+Notifications are retained based on service settings:
+
+- Default retention: 7 days
+- Configurable per service and message type
+- Shown in UI: "Messages sent in the last X days"
+
+Access retention value: `current_service.get_days_of_retention(message_type)`
+
+## Downloading notifications
+
+### CSV export limits
+
+Two download methods available:
+
+<Tabs>
+  <Tab title="Direct download">
+    **When available**: Notification count ≤ `MAX_NOTIFICATION_FOR_DOWNLOAD` constant
+    
+    **Download link**: Appears at top of notifications page
+    
+    **URL**: `/services/{service_id}/download-notifications.csv`
+    
+    **Parameters**:
+    - `message_type`: email, sms, or letter
+    - `status`: Filter by status
+    
+    **Limits**:
+    - Page size: 10,000 rows
+    - Respects service data retention days
+  </Tab>
+  
+  <Tab title="Report request">
+    **When available**: Count ≤ `REPORT_REQUEST_MAX_NOTIFICATIONS` (if feature flag enabled)
+    
+    **Process**:
+    1. Click "Request a report" button
+    2. System creates report request via API
+    3. Redirects to report request status page
+    
+    **Report types**:
+    - `report_type`: Type of report requested
+    - Includes notification type and status filters
+    
+    Asynchronous processing for larger datasets.
+  </Tab>
+</Tabs>
+
+### Download format
+
+CSV exports include:
+- Recipient information (formatted for human readability)
+- Message status
+- Sent date/time (numeric format)
+- Template name
+- Additional metadata based on notification type
+
+**Filename format**: `{date} - {message_type} - {service_name} report.csv`
+
+<Warning>
+Downloads are not available if notification count exceeds the maximum threshold. In this case, contact support or use the API to retrieve notifications.
+</Warning>
+
+## Monthly statistics
+
+View historical notification volume by month.
+
+### Monthly view
+
+Access at `/services/{service_id}/monthly` to see:
+
+- Month-by-month breakdown for selected financial year
+- Counts by message type (email, SMS, letter)
+- Requested vs. delivered vs. failed counts
+- Failure percentage for each month
+- Warning indicators for high failure rates (>3%)
+
+### Year selector
+
+Switch between financial years:
+- Default: Current financial year
+- Available: Current year and 2 previous years
+- URL parameter: `?year=2024`
+- Financial year: April 1 - March 31
+
+**Example URL**: `/services/{service_id}/monthly?year=2024`
+
+## Template usage reporting
+
+Analyze which templates are being used and how often.
+
+### Template usage page
+
+Access at `/services/{service_id}/template-usage` to see:
+
+- Monthly breakdown of template usage
+- Templates grouped by month
+- Sorted by usage count (highest first)
+- Visual bar chart showing relative usage
+
+### Usage data
+
+For each template in each month:
+- Template ID and name
+- Template type (email/SMS/letter)
+- Total count sent
+- Whether it's a precompiled letter
+
+Data is filtered to exclude:
+- Cancelled notifications
+- Future months
+
+**Data source**: `template_statistics_client.get_monthly_template_usage_for_service(service_id, year)`
+
+### Year filtering
+
+Same financial year selection as monthly statistics:
+- Current year plus 2 previous years
+- URL parameter: `?year=2024`
+
+## Usage and billing
+
+Track your service usage against allowances and view costs.
+
+### Usage page
+
+Access at `/services/{service_id}/usage` (requires `manage_service` or org user permission):
+
+<Steps>
+  <Step title="Annual summary">
+    Shows for selected financial year:
+    
+    **SMS**:
+    - Free allowance for the year
+    - Total fragments sent (chargeable units)
+    - Remaining allowance
+    - Total cost (if exceeds allowance)
+    
+    **Emails**:
+    - Total sent (emails are free)
+    
+    **Letters**:
+    - Total sent
+    - Total cost (all letters are charged)
+  </Step>
+  
+  <Step title="Monthly breakdown">
+    For each month in the financial year:
+    
+    **SMS**:
+    - Free allowance used that month
+    - Breakdown by rate (if charged)
+    - Cost for the month
+    
+    **Letters**:
+    - Count by postage type (first class, second class, international)
+    - Rate per letter
+    - Cost breakdown
+  </Step>
+</Steps>
+
+### Dashboard usage widget
+
+For users with `manage_service` permission, dashboard shows annual usage:
+
+- Updates via AJAX: `/services/{service_id}/dashboard-usage.json`
+- Shows current year usage summary
+- Links to full usage page
+
+### Letter postage breakdown
+
+Letters are grouped by:
+1. **Postage type** (ordered: first class, second class, economy mail, international)
+2. **Rate** (price per letter)
+
+Each group shows:
+- Number of letters sent
+- Rate charged
+- Total cost for that group
+
+## Inbox (inbound SMS)
+
+View and manage received text messages.
+
+### Inbox page
+
+For services with `inbound_sms` permission, access at `/services/{service_id}/inbox`:
+
+- Shows received text messages in reverse chronological order
+- Pagination (50 messages per page)
+- Auto-refreshes via `/services/{service_id}/inbox.json`
+
+### Message display
+
+Each inbound message shows:
+- Sender phone number (formatted for human readability)
+- Message content (with Excel formula characters stripped: `=+-@`)
+- Received date/time (numeric format)
+- Link to conversation thread
+
+### Download inbox
+
+Export all inbound messages to CSV:
+
+**URL**: `/services/{service_id}/inbox.csv`
+
+**Columns**:
+1. Phone number
+2. Message
+3. Received (timestamp)
+
+**Filename**: `Received text messages {current_date}.csv`
+
+<Note>
+The inbox download includes ALL inbound messages for the service, not just the current page.
+</Note>
+
+## Individual notification details
+
+View detailed information about a specific notification.
+
+### Notification page
+
+Access at `/services/{service_id}/notification/{notification_id}`:
+
+- Full notification details
+- Rendered template with personalisation
+- Current delivery status
+- Status history
+- Error messages (if failed)
+- Letter preview (for letters)
+
+### Navigation context
+
+The notification page provides contextual back links based on how you arrived:
+
+- **From job**: Back to job page
+- **From uploaded letters**: Back to uploaded letters for that print day
+- **From search**: Back to search results (preserves search hash)
+- **From status filter**: Back to notifications with same filter
+- **Just sent**: No back link (help=0 parameter)
+
+### Letter-specific features
+
+<Tabs>
+  <Tab title="Precompiled letters">
+    For uploaded PDF letters:
+    
+    - Shows page count from metadata
+    - Displays validation errors with affected page numbers
+    - Preview shows actual PDF pages as PNG images
+    - Option to cancel (if not yet sent to printer)
+  </Tab>
+  
+  <Tab title="Templated letters">
+    For letters sent via templates:
+    
+    - Renders preview from template and personalisation
+    - Shows if letter exceeds 10 pages
+    - Displays postage type
+    - Letter printing schedule information
+  </Tab>
+</Tabs>
+
+### Real-time status updates
+
+Notification status updates via JSON endpoint:
+
+**URL**: `/services/{service_id}/notification/{notification_id}.json`
+
+**Returns**: Status partial HTML for dynamic updates
+
+## Report requests
+
+For large datasets exceeding direct download limits.
+
+### Creating a report request
+
+From notifications page:
+
+1. Click "Request a report" button
+2. System calls: `report_request_api_client.create_report_request()`
+3. Receives `report_request_id`
+4. Redirects to: `/services/{service_id}/report-request/{report_request_id}`
+
+### Report request parameters
+
+- `user_id`: Current user requesting the report
+- `report_type`: Type of report (from form submission)
+- `notification_type`: Message type filter (email/sms/letter)
+- `notification_status`: Status filter (sending/delivered/failed/all)
+
+### Feature flag
+
+Report requests enabled when:
+```python
+REPORT_REQUEST_MAX_NOTIFICATIONS > 0 and 
+notifications_count <= REPORT_REQUEST_MAX_NOTIFICATIONS
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Monitor failure rates" icon="triangle-exclamation">
+    Check dashboard daily for failure percentages above 3% - investigate templates or recipient data quality.
+  </Card>
+  
+  <Card title="Use status filters" icon="filter">
+    When troubleshooting, filter to failed notifications and search by recipient to identify patterns.
+  </Card>
+  
+  <Card title="Download regularly" icon="download">
+    Export notification data regularly for your own records, respecting the data retention period.
+  </Card>
+  
+  <Card title="Review template stats" icon="chart-bar">
+    Use template usage reports to identify unused templates that could be archived.
+  </Card>
+</CardGroup>

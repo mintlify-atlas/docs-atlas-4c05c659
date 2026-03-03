@@ -1,0 +1,276 @@
+---
+title: Service management
+description: Create, configure, and manage GOV.UK Notify services
+---
+
+Services are the fundamental organizational unit in GOV.UK Notify. Each service represents an application or team that sends notifications, with its own templates, team members, and settings.
+
+## Creating a service
+
+<Steps>
+  <Step title="Access the add service page">
+    Navigate to `/add-service` from your dashboard. This option is available to government users.
+  </Step>
+  
+  <Step title="Name your service">
+    Choose a clear, descriptive name for your service at `/add-service/name-your-service`.
+    
+    The service name:
+    - Appears in email sender names (unless customized)
+    - Is visible to your team members
+    - Should reflect your organization or application
+  </Step>
+  
+  <Step title="Select organization type">
+    Choose the organization type that matches your service:
+    - Central government
+    - Local government
+    - NHS (with specific sub-types for GP practices, local NHS, and central NHS)
+    - Other public sector organizations
+    
+    <Note>
+      NHS GP practices have a zero message limit in trial mode to prevent accidental sends.
+    </Note>
+  </Step>
+</Steps>
+
+### First-time service creation
+
+When you create your first service, you'll see an interactive tour that demonstrates:
+- How to use an example SMS template
+- The basic workflow for sending notifications
+- Key features of the platform
+
+The tour uses an auto-generated example template:
+```
+Hey ((name)), I'm trying out Notify. Today is ((day of week)) and my favourite colour is ((colour)).
+```
+
+## Service modes
+
+### Trial mode
+
+All new services start in trial mode with these restrictions:
+
+<Warning>
+  In trial mode, you can only send notifications to:
+  - Members of your team
+  - Email addresses and phone numbers on your guest list
+  - Test API keys (which don't actually send messages)
+</Warning>
+
+**Default limits in trial mode:**
+- Email: 50 messages per day
+- SMS: 50 messages per day  
+- Letters: 50 messages per day
+- International SMS: 10 messages per day
+
+Key restrictions:
+- Cannot create "Live" API keys (only "Team and guest list" or "Test" keys)
+- Cannot send to arbitrary recipients
+
+### Live mode
+
+To request live access, your service must complete the go-live checklist:
+
+<Steps>
+  <Step title="Add estimated usage volumes">
+    Provide estimates for email, SMS, and letter volumes at `app/models/service.py:428`
+  </Step>
+  
+  <Step title="Add team members with manage service permission">
+    You need at least 2 team members who can manage the service
+  </Step>
+  
+  <Step title="Create templates">
+    Add at least one template for your notification channel
+  </Step>
+  
+  <Step title="Configure email sender name (for email services)">
+    Confirm your email sender name if sending emails
+  </Step>
+  
+  <Step title="Add email reply-to address (for email services)">
+    Configure where email replies should go
+  </Step>
+  
+  <Step title="Change SMS sender (for non-central government)">
+    Local authorities and NHS organizations must change from the default "GOVUK" sender
+  </Step>
+  
+  <Step title="Confirm service uniqueness">
+    Verify that your service name and purpose are unique
+  </Step>
+</Steps>
+
+Once approved, services can:
+- Send to any recipient
+- Create live API keys
+- Send unlimited messages (within allocated allowances)
+
+## Service permissions
+
+Services can be enabled for different notification channels:
+
+<Tabs>
+  <Tab title="Email">
+    Enable email notifications for your service. Requires:
+    - Email branding configuration
+    - Reply-to email addresses
+    - Email sender name (custom or service name)
+  </Tab>
+  
+  <Tab title="SMS">
+    Enable text message notifications. Features:
+    - SMS sender configuration (11 characters or UK mobile number)
+    - Optional inbound SMS (receive replies)
+    - SMS prefix option (adds service name to messages)
+  </Tab>
+  
+  <Tab title="Letter">
+    Enable postal letter notifications. Supports:
+    - Custom letter branding
+    - Letter contact details (address shown in top right)
+    - International letters (optional permission)
+    - Welsh language letters
+  </Tab>
+</Tabs>
+
+### Advanced permissions
+
+Additional service-level permissions include:
+
+| Permission | Description | Location |
+|------------|-------------|----------|
+| `email_auth` | Allow team members to sign in with email codes | `app/models/service.py:73` |
+| `inbound_sms` | Receive text message replies | `app/models/service.py:74` |
+| `international_sms` | Send messages to international numbers | `app/models/service.py:76` |
+| `international_letters` | Send letters internationally | `app/models/service.py:75` |
+| `send_files_via_ui` | Upload and send letters via the UI | `app/models/service.py:77` |
+| `sms_to_uk_landlines` | Send SMS to UK landline numbers | `app/models/service.py:78` |
+| `edit_folder_permissions` | Enable folder-level permissions | `app/models/service.py:72` |
+
+## Service settings
+
+### Contact information
+
+Services can configure contact details for recipients:
+- **Contact link**: URL, email address, or phone number shown to recipients
+- Appears in email footers and notification pages
+- Helps recipients get support or ask questions
+
+### Billing details
+
+For invoicing and cost tracking, services can store:
+- Billing contact email addresses
+- Billing contact names  
+- Billing reference codes
+- Purchase order numbers
+
+### Message limits
+
+Each service has configurable daily limits:
+
+```python
+email_message_limit: int      # Default: 50 in trial, higher when live
+sms_message_limit: int        # Default: 50 in trial
+letter_message_limit: int     # Default: 50 in trial  
+international_sms_message_limit: int  # Default: 10
+rate_limit: int              # API requests per second
+```
+
+<Note>
+The system tracks messages sent today and prevents exceeding limits through `remaining_messages()` at `app/models/service.py:638`.
+</Note>
+
+## Service data retention
+
+Services can configure how long notification data is retained:
+
+- Default: 7 days for all notification types
+- Can be customized per notification type (email, SMS, letter)
+- Affects dashboard statistics and notification history
+- Managed at `app/models/service.py:458`
+
+<Warning>
+Data retention settings affect what users can see in the dashboard and download in reports.
+</Warning>
+
+## Branding
+
+### Email branding
+
+- **GOV.UK branding**: Default for central government
+- **Organization branding**: Custom logos, colors, and banners
+- **Branding pool**: Organizations can offer multiple branding options
+
+Access: `app/models/service.py:482`
+
+### Letter branding  
+
+- Custom letter templates with organization headers
+- Logo placement and styling
+- Managed through letter branding pool
+
+Access: `app/models/service.py:494`
+
+<Note>
+Non-central government services must use organization-specific branding instead of GOV.UK branding.
+</Note>
+
+## Organization association
+
+Services can be associated with an organization:
+
+- Inherits organization type and settings
+- Access to organization branding pools
+- Organization users can view service activity
+- Required for go-live approval process
+
+```python
+organisation_id: str
+organisation_type: str  # Overridden by organization if set
+```
+
+## Service callbacks
+
+Services can configure webhooks for real-time updates:
+
+<Tabs>
+  <Tab title="Delivery status">
+    Receive notifications when messages are delivered or fail.
+    
+    **Endpoint**: `/services/{service_id}/api/callbacks/delivery-status-callback`  
+    **Available for**: All services
+  </Tab>
+  
+  <Tab title="Inbound SMS">
+    Receive incoming text messages sent to your service number.
+    
+    **Endpoint**: `/services/{service_id}/api/callbacks/received-text-messages-callback`  
+    **Requires**: `inbound_sms` permission
+  </Tab>
+  
+  <Tab title="Returned letters">
+    Get notified about undeliverable letters.
+    
+    **Endpoint**: `/services/{service_id}/api/callbacks/returned-letters-callback`  
+    **Available for**: Letter services
+  </Tab>
+</Tabs>
+
+Callbacks require:
+- HTTPS URL
+- Bearer token for authentication
+- Managed at `app/main/views/api_keys.py:228`
+
+## Service statistics
+
+View service activity at `/services/{service_id}`:
+
+- **7-day totals**: Recent notification counts by channel
+- **Template usage**: Most-used templates in the last week  
+- **Scheduled jobs**: Upcoming bulk sends
+- **Inbox**: Received text messages (if inbound SMS enabled)
+
+Statistics are aggregated at `app/main/views/dashboard.py:556`.

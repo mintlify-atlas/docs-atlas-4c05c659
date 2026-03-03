@@ -1,0 +1,422 @@
+---
+title: Session Management
+description: Session configuration, security settings, and timeout policies in GOV.UK Notify Admin
+---
+
+GOV.UK Notify Admin implements secure session management using Flask sessions with custom timeout policies for regular users and platform administrators. This page documents the session configuration, security settings, and implementation details.
+
+## Session Configuration
+
+### Core Session Settings
+
+The application configures Flask sessions with the following settings in `app/config.py:49`:
+
+<ParamField path="PERMANENT_SESSION_LIFETIME" type="integer">
+  Maximum session duration for all users.
+  
+  **Value:** `72000` seconds (20 hours)
+  
+  **Purpose:** Absolute maximum time a user can remain logged in without re-authenticating.
+</ParamField>
+
+<ParamField path="PLATFORM_ADMIN_INACTIVE_SESSION_TIMEOUT" type="integer">
+  Inactivity timeout for platform administrators.
+  
+  **Value:** `1800` seconds (30 minutes)
+  
+  **Purpose:** Platform admin sessions expire after 30 minutes of inactivity for enhanced security.
+</ParamField>
+
+<ParamField path="SESSION_COOKIE_HTTPONLY" type="boolean">
+  Prevents JavaScript access to session cookies.
+  
+  **Value:** `True`
+  
+  **Security:** Protects against XSS attacks stealing session cookies.
+</ParamField>
+
+<ParamField path="SESSION_COOKIE_NAME" type="string">
+  Name of the session cookie.
+  
+  **Value:** `notify_admin_session`
+</ParamField>
+
+<ParamField path="SESSION_COOKIE_SECURE" type="boolean">
+  Requires HTTPS for session cookies.
+  
+  **Value:** `True` (production), `False` (development)
+  
+  **Security:** Prevents session hijacking on insecure connections.
+</ParamField>
+
+<ParamField path="SESSION_COOKIE_SAMESITE" type="string">
+  Controls when cookies are sent with cross-site requests.
+  
+  **Value:** `Lax`
+  
+  **Options:** `Strict`, `Lax`, `None`
+  
+  **Security:** Provides CSRF protection while allowing legitimate cross-site navigation.
+</ParamField>
+
+<ParamField path="SESSION_REFRESH_EACH_REQUEST" type="boolean">
+  Controls whether session expiry is updated on every request.
+  
+  **Value:** `False`
+  
+  **Purpose:** Reduces unnecessary session updates. Session expiry is updated only when session data changes.
+</ParamField>
+
+<Note>
+  Setting `SESSION_REFRESH_EACH_REQUEST` to `False` improves performance by avoiding session writes on every request. The session expiry is still updated by the `save_service_or_org_after_request` handler for most page loads.
+</Note>
+
+## Custom Session Interface
+
+GOV.UK Notify Admin implements a custom session interface (`NotifyAdminSessionInterface`) to support differentiated timeout policies for regular users and platform administrators.
+
+### Implementation
+
+The custom session interface is defined in `app/notify_session.py:10` and registered in `app/__init__.py:239`:
+
+```python
+application.session_interface = NotifyAdminSessionInterface()
+```
+
+### Session Lifecycle
+
+#### Session Creation
+
+When a user logs in:
+
+1. User ID is stored in the session: `session["user_id"] = user.id` (`app/models/user.py:192`)
+2. Session start timestamp is recorded: `session["session_start"] = datetime.now(UTC).isoformat()` (`app/models/user.py:193`)
+3. Current session ID from API is stored: `session["current_session_id"] = user.current_session_id` (`app/utils/login.py:23`)
+
+#### Session Expiry Calculation
+
+The `NotifyAdminSessionInterface` calculates session expiry based on user type:
+
+**For regular users:**
+- Session lasts up to 20 hours from login
+- No inactivity timeout
+- Effectively never needs refreshing
+
+**For platform administrators:**
+- Session lasts up to 20 hours from login
+- **Additional:** Session expires after 30 minutes of inactivity
+- Inactivity timer resets on each page load
+
+**Implementation in `app/notify_session.py:11`:**
+
+```python
+def _get_inactive_session_expiry(self, app, session_start: datetime):
+    absolute_expiration = session_start + app.permanent_session_lifetime
+    
+    if current_user and current_user.platform_admin:
+        refresh_duration = timedelta(seconds=app.config["PLATFORM_ADMIN_INACTIVE_SESSION_TIMEOUT"])
+    else:
+        refresh_duration = app.permanent_session_lifetime
+    
+    return min(datetime.now(UTC) + refresh_duration, absolute_expiration)
+```
+
+#### Session Validation
+
+On each request, `open_session` validates the session expiry:
+
+```python
+def open_session(self, app: Flask, request: Request) -> SecureCookieSession | None:
+    session = super().open_session(app=app, request=request)
+    
+    if "session_expiry" in session:
+        if datetime.now(UTC) > datetime.fromisoformat(session["session_expiry"]):
+            return self.session_class()  # Return blank session if expired
+    
+    return session
+```
+
+**Source:** `app/notify_session.py:42`
+
+#### Session Updates
+
+The `save_session` method updates session expiry timestamps:
+
+```python
+def save_session(self, app: Flask, session: SecureCookieSession, response: Response) -> None:
+    if "user_id" in session:
+        if "session_start" not in session:
+            session["session_start"] = datetime.now(UTC).isoformat()
+        
+        session["session_expiry"] = self._get_inactive_session_expiry(
+            app, datetime.fromisoformat(session["session_start"])
+        ).isoformat()
+    
+    super().save_session(app=app, session=session, response=response)
+```
+
+**Source:** `app/notify_session.py:52`
+
+### Selective Cookie Setting
+
+The session interface implements `should_set_cookie` to avoid setting cookies on specific blueprints:
+
+```python
+def should_set_cookie(self, app, session):
+    return request.blueprint not in (JSON_UPDATES_BLUEPRINT_NAME, NO_COOKIE_BLUEPRINT_NAME)
+```
+
+**Purpose:**
+- Prevents session refresh on auto-updating pages (dashboard, notifications list)
+- Avoids race conditions where slow requests overwrite session data from newer requests
+- No cookies on letter preview images
+
+**Blueprints excluded:**
+- `json_updates` - JSON endpoints for auto-refreshing pages
+- `no_cookie` - Letter previews and platform admin email branding previews
+
+**Source:** `app/notify_session.py:64`
+
+## Session Data
+
+### Standard Session Keys
+
+| Key | Type | Purpose | Set By |
+|-----|------|---------|--------|
+| `user_id` | string | Logged-in user ID | `app/models/user.py:192` |
+| `session_start` | string (ISO) | Login timestamp | `app/models/user.py:193` |
+| `session_expiry` | string (ISO) | Calculated expiry time | `app/notify_session.py:58` |
+| `current_session_id` | string | API session ID | `app/utils/login.py:23` |
+| `service_id` | string | Currently selected service | Various |
+| `organisation_id` | string | Currently selected organisation | Various |
+
+### Temporary Session Keys
+
+These keys are used for multi-step flows and cleared after completion:
+
+| Key | Purpose | Cleared By |
+|-----|---------|------------|
+| `user_details` | Registration/login flow data | `app/utils/login.py:31` |
+| `file_uploads` | Temporary file upload tracking | `app/utils/login.py:32` |
+| `invited_user_id` | User invitation acceptance | Various |
+| `invited_org_user_id` | Org invitation acceptance | Various |
+| `webauthn_registration_state` | WebAuthn registration state | `app/main/views/webauthn_credentials.py:33` |
+| `disable_platform_admin_view` | Platform admin view toggle | `app/main/views/your_account.py:272` |
+
+### Email and Phone Change Flows
+
+| Key | Purpose | Source |
+|-----|---------|--------|
+| `NEW_EMAIL` | Email address being changed to | `app/main/views/your_account.py:69` |
+| `NEW_MOBILE` | Mobile number being changed to | `app/main/views/your_account.py:129` |
+| `NEW_MOBILE_PASSWORD_CONFIRMED` | Password confirmed for mobile change | `app/main/views/your_account.py:168` |
+
+## Session Security
+
+### CSRF Protection
+
+<ParamField path="WTF_CSRF_ENABLED" type="boolean">
+  Enable Flask-WTF CSRF protection.
+  
+  **Value:** `True` (production/development), `False` (test)
+</ParamField>
+
+<ParamField path="WTF_CSRF_TIME_LIMIT" type="None">
+  CSRF token expiration time.
+  
+  **Value:** `None` (no time limit)
+  
+  **Reason:** Session timeout provides sufficient protection without requiring token refresh.
+</ParamField>
+
+CSRF protection is implemented via Flask-WTF (`app/__init__.py:158`):
+
+```python
+csrf = CSRFProtect()
+csrf.init_app(application)
+```
+
+**Error handling** in `app/__init__.py:490`:
+
+```python
+@application.errorhandler(CSRFError)
+def handle_csrf(reason):
+    if "user_id" not in session:
+        # Session expired - redirect to login
+        return application.login_manager.unauthorized()
+    
+    # Invalid token - return 400 error
+    return _error_response(400, error_page_template=500)
+```
+
+### Session Invalidation
+
+Sessions are invalidated when:
+
+1. **User logs out** - `app/models/user.py:202`:
+   ```python
+   def sign_out(self):
+       session.clear()
+       self.update(current_session_id=None)
+   ```
+
+2. **Session ID mismatch** - `app/models/user.py:181`:
+   ```python
+   @property
+   def logged_in_elsewhere(self):
+       return session.get("current_session_id") != self.current_session_id
+   ```
+   
+   Protects against session hijacking by ensuring only the most recent session is valid.
+
+3. **Session expiry** - Automatically by `NotifyAdminSessionInterface.open_session`
+
+### Security Headers
+
+Session cookies are protected by multiple HTTP security headers set in `app/__init__.py:361`:
+
+- **Strict-Transport-Security:** `max-age=31536000; includeSubDomains; preload`
+- **X-Content-Type-Options:** `nosniff`
+- **X-Frame-Options:** `SAMEORIGIN`
+- **Content-Security-Policy:** Restricts resource loading
+
+## Development vs Production
+
+### Development Configuration
+
+```python
+class Development(Config):
+    SESSION_COOKIE_SECURE = False  # Allow HTTP
+    SESSION_PROTECTION = None      # Disable Flask-Login session protection
+```
+
+**Source:** `app/config.py:112`
+
+Allows testing over HTTP without HTTPS setup.
+
+### Production Configuration
+
+```python
+class Config:
+    SESSION_COOKIE_SECURE = True   # Require HTTPS
+    SESSION_COOKIE_HTTPONLY = True # Prevent JavaScript access
+    SESSION_COOKIE_SAMESITE = "Lax" # CSRF protection
+```
+
+**Source:** `app/config.py:52`
+
+<Warning>
+  Never set `SESSION_COOKIE_SECURE = False` in production. This would allow session cookies to be sent over unencrypted HTTP, enabling session hijacking attacks.
+</Warning>
+
+## Testing Sessions
+
+In test environments (`app/config.py:143`):
+
+```python
+class Test(Development):
+    TESTING = True
+    WTF_CSRF_ENABLED = False  # Disable CSRF for easier testing
+```
+
+CSRF is disabled in tests to simplify test code. All test requests are assumed trusted.
+
+## Platform Admin Session Timeout
+
+### Rationale
+
+Platform administrators have elevated privileges, including:
+- Viewing all services
+- Modifying service settings
+- Accessing user data
+- Managing platform configuration
+
+The 30-minute inactivity timeout provides a balance between security and usability:
+
+- **Security:** Reduces risk of unauthorized access if admin leaves workstation unlocked
+- **Usability:** 30 minutes is sufficient for most administrative tasks
+- **Absolute limit:** 20-hour maximum still applies
+
+### Toggling Platform Admin View
+
+Platform admins can temporarily disable their elevated view (`app/main/views/your_account.py:261`):
+
+```python
+if not current_user.platform_admin and not session.get("disable_platform_admin_view"):
+    abort(403)
+```
+
+This allows platform admins to experience the application as regular users without logging out.
+
+## Session Storage
+
+### Flask Session Backend
+
+By default, Flask sessions use **signed cookies**:
+
+- Session data is stored client-side in the cookie
+- Signed with `SECRET_KEY` to prevent tampering
+- Limited to ~4KB of data
+- No server-side storage required
+
+### Redis Session Storage
+
+While Redis is configured (`REDIS_URL`, `REDIS_ENABLED`), it is used for caching, not session storage. The application uses Flask's default secure cookie sessions.
+
+**Redis configuration** in `app/config.py:87`:
+
+```python
+REDIS_URL = os.environ.get("REDIS_URL")
+REDIS_ENABLED = False if os.environ.get("REDIS_ENABLED") == "0" else True
+```
+
+## Troubleshooting
+
+### Session Expires Immediately
+
+**Symptoms:** User is logged out immediately after login.
+
+**Possible causes:**
+- `SECRET_KEY` changed between requests
+- Cookie not being sent (check `SESSION_COOKIE_SECURE` with HTTP)
+- Browser blocking cookies
+- System clock skew causing expiry timestamps to be in the past
+
+### Platform Admin Session Timeout Too Short
+
+The 30-minute timeout is intentional. To extend:
+
+```python
+PLATFORM_ADMIN_INACTIVE_SESSION_TIMEOUT = 60 * 60  # 1 hour
+```
+
+<Warning>
+  Extending the platform admin timeout reduces security. Consider the risk vs. convenience tradeoff for your deployment.
+</Warning>
+
+### CSRF Token Invalid
+
+**Symptoms:** Forms fail with "CSRF token invalid" error.
+
+**Solutions:**
+- Verify `SECRET_KEY` is consistent across requests
+- Check session is not expiring between page load and form submission
+- Ensure forms include the CSRF token: `{{ csrf_token() }}`
+
+### Session Data Lost
+
+Session data may be lost if:
+
+1. **Session cookie too large** (>4KB)
+   - Solution: Store less data in session, use database for persistent data
+
+2. **Concurrent requests** on auto-refreshing pages
+   - Solution: Already handled by `should_set_cookie` excluding `json_updates` blueprint
+
+3. **Redis connection failure** (if using Redis for other features)
+   - Solution: Check Redis connectivity, session data is in cookies not Redis
+
+## Related Documentation
+
+- [Environment Variables](/configuration/environment-variables) - Session-related environment variables
+- [AWS Setup](/configuration/aws-setup) - AWS credentials for production deployments

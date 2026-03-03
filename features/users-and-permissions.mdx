@@ -1,0 +1,377 @@
+---
+title: Users and permissions
+description: Manage team members, invite users, and configure role-based access control
+---
+
+GOV.UK Notify uses a granular permission system to control what team members can do within a service. Users can be assigned different combinations of permissions based on their role.
+
+## Team member management
+
+Access the team management page at `/services/{service_id}/users` to view and manage all team members.
+
+### User types
+
+<Tabs>
+  <Tab title="Active users">
+    Users who have accepted their invitation and can access the service.
+    
+    **Status**: `state: "active"`  
+    **Can**: Log in, perform actions based on permissions  
+    **Location**: `app/models/user.py:223`
+  </Tab>
+  
+  <Tab title="Invited users">
+    Users who have been sent an invitation but haven't accepted yet.
+    
+    **Status**: `status: "pending"`  
+    **Expires**: Invitations remain valid until accepted or cancelled  
+    **Location**: `app/models/user.py:482`
+  </Tab>
+  
+  <Tab title="Platform admins">
+    Special users with elevated privileges across all services.
+    
+    **Can**: Access any service, modify most settings  
+    **Cannot**: Send messages or create API keys (when `restrict_admin_usage=True`)  
+    **Location**: `app/models/user.py:239`
+  </Tab>
+</Tabs>
+
+## Permission types
+
+There are 5 core permission types in Notify:
+
+### Manage settings, team and usage
+
+**UI Permission**: `manage_service`  
+**Database Permissions**: `manage_users`, `manage_settings`
+
+Users with this permission can:
+- Add and remove team members
+- Change service settings
+- Configure branding and senders  
+- View usage and billing information
+- Manage template folders
+- Request go-live
+
+<Note>
+This is the most powerful permission. At least 2 team members must have this permission before a service can go live.
+</Note>
+
+### See dashboard
+
+**UI Permission**: `view_activity`  
+**Database Permission**: `view_activity`
+
+Users can:
+- View the service dashboard
+- See notification statistics
+- Access the notifications page
+- View sent message details
+- Download notification reports (if under 250,000 notifications)
+- Access template usage statistics
+
+### Send messages  
+
+**UI Permission**: `send_messages`  
+**Database Permissions**: `send_texts`, `send_emails`, `send_letters`
+
+Users can:
+- Send one-off notifications
+- Upload and send bulk messages via CSV
+- Send test messages to themselves
+- Schedule notifications for later
+
+<Warning>
+Platform admins cannot send messages (even with this permission) to prevent accidental sends.
+</Warning>
+
+### Add and edit templates
+
+**UI Permission**: `manage_templates`  
+**Database Permission**: `manage_templates`
+
+Users can:
+- Create new templates
+- Edit existing templates  
+- Delete templates
+- Organize templates into folders
+- View template version history
+- Copy templates between services
+
+### Manage API integration
+
+**UI Permission**: `manage_api_keys`  
+**Database Permission**: `manage_api_keys`
+
+Users can:
+- Create API keys
+- Revoke API keys
+- Configure guest lists
+- Set up delivery status callbacks
+- View API integration details
+
+<Note>
+Platform admins cannot create or revoke API keys to prevent security issues.
+</Note>
+
+## Permission mappings
+
+The system translates between UI-friendly permissions and database permissions:
+
+```python
+permission_mappings = {
+    "send_messages": ["send_texts", "send_emails", "send_letters"],
+    "manage_templates": ["manage_templates"],
+    "manage_service": ["manage_users", "manage_settings"],
+    "manage_api_keys": ["manage_api_keys"],
+    "view_activity": ["view_activity"],
+}
+```
+
+Location: `app/utils/user_permissions.py:5`
+
+## Inviting users
+
+<Steps>
+  <Step title="Navigate to invite page">
+    Go to `/services/{service_id}/users/invite` (requires `manage_service` permission)
+  </Step>
+  
+  <Step title="Enter email address">
+    Provide the email address of the person to invite.
+    
+    **Validation**:
+    - Government users: Must have a `.gov.uk` or approved domain email
+    - Non-government users: Additional verification required
+  </Step>
+  
+  <Step title="Select permissions">
+    Choose which permissions the user should have using checkboxes:
+    - Manage settings, team and usage
+    - See dashboard  
+    - Send messages
+    - Add and edit templates
+    - Manage API integration
+  </Step>
+  
+  <Step title="Configure folder access (optional)">
+    If folder permissions are enabled, select which template folders the user can access.
+  </Step>
+  
+  <Step title="Choose authentication method">
+    Select how the user will sign in:
+    
+    <Tabs>
+      <Tab title="Text message code">
+        User receives a code via SMS on each login.  
+        Requires a mobile number.
+      </Tab>
+      
+      <Tab title="Email link or text message code">
+        User can choose between email link or SMS code.  
+        Only available if service has `email_auth` permission.
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+Implementation: `app/main/views/manage_users.py:38`
+
+### Inviting users from your organization
+
+If inviting a user who:
+- Already has a Notify account
+- Belongs to the same organization as your service
+- Isn't already a team member
+
+You can invite them directly via `/services/{service_id}/users/invite/{user_id}`, which pre-fills their email address.
+
+## Editing user permissions
+
+To modify an existing team member's permissions:
+
+1. Navigate to `/services/{service_id}/users/{user_id}`
+2. Update their permission checkboxes
+3. Modify folder access if needed  
+4. Change authentication method (if not using security keys)
+5. Save changes
+
+<Note>
+Changes are logged in the events system for audit purposes at `app/event_handlers.py`.
+</Note>
+
+## Authentication methods
+
+Users can sign in using three methods:
+
+### SMS authentication
+
+**Auth type**: `sms_auth`
+
+- User enters mobile number during registration
+- Receives 6-digit code via text message on each login
+- Code valid for 60 minutes
+- Most secure for sensitive government services
+
+### Email authentication  
+
+**Auth type**: `email_auth`
+
+- User receives a magic link via email
+- Link valid for 60 minutes
+- No mobile number required
+- Only available if service has `email_auth` permission
+
+### WebAuthn (Security keys)
+
+**Auth type**: `webauthn_auth`
+
+- Uses hardware security keys (like YubiKey)
+- Most secure authentication method
+- Cannot be changed to less secure method
+- Managed at `app/models/webauthn_credential.py`
+
+<Warning>
+Users with WebAuthn enabled cannot be switched to SMS or email authentication for security reasons.
+</Warning>
+
+## Folder permissions
+
+When `edit_folder_permissions` is enabled for a service, you can restrict users to specific template folders:
+
+- Users can only see and edit templates in their assigned folders
+- Platform admins and organization users can see all folders
+- Top-level templates are always visible to everyone
+- Checked at `app/models/user.py:290`
+
+**Use cases**:
+- Multi-team services with separate template sets
+- Restricting access to sensitive templates
+- Delegating template management by department
+
+## Service join requests
+
+For organizations with `can_ask_to_join_a_service` enabled, users can request to join a service:
+
+<Steps>
+  <Step title="User submits request">
+    User from the same organization requests access to the service.  
+    Location: `app/models/service.py:216`
+  </Step>
+  
+  <Step title="Service managers notified">
+    All users with `manage_service` permission receive notification.
+  </Step>
+  
+  <Step title="Manager reviews request">
+    Navigate to `/services/{service_id}/join-request/{request_id}/approve` to review.  
+    Implementation: `app/main/views/manage_users.py:131`
+  </Step>
+  
+  <Step title="Approve or reject">
+    - **Approve**: Choose permissions and add user to service
+    - **Reject**: User is notified and request is closed
+  </Step>
+</Steps>
+
+Request statuses:
+- `pending`: Awaiting approval
+- `approved`: User added to service  
+- `rejected`: Request denied
+- `cancelled`: Request withdrawn by requester
+
+Defined at: `app/constants.py:9-12`
+
+## Removing users
+
+To remove a user from a service:
+
+1. Go to `/services/{service_id}/users/{user_id}`
+2. Click "Remove user from service"
+3. Confirm removal via POST to `/services/{service_id}/users/{user_id}/delete`
+
+<Warning>
+You cannot remove the only user from a service. There must always be at least one team member.
+</Warning>
+
+Removal is logged for audit purposes at `app/main/views/manage_users.py:277`.
+
+## Cancelling invitations
+
+Invitations can be cancelled before they're accepted:
+
+```python
+def cancel_invite(self, invited_user_id):
+    if str(invited_user_id) not in {user.id for user in self.invited_users}:
+        abort(404)
+    
+    return invite_api_client.cancel_invited_user(
+        service_id=self.id,
+        invited_user_id=str(invited_user_id),
+    )
+```
+
+Location: `app/models/service.py:207`
+
+## User account management
+
+Team members can manage their own accounts:
+
+### Change email address
+
+- Navigate to user profile settings
+- Update email address  
+- Verify new address via confirmation email
+- Government users must use approved domains
+
+Implementation: `app/main/views/manage_users.py:282`
+
+### Change mobile number
+
+- Update mobile number for SMS authentication
+- Verify via code sent to new number
+- Required for users with `sms_auth` authentication
+
+### Email validation
+
+Users must revalidate their email every 90 days:
+
+```python
+@property
+def email_needs_revalidating(self):
+    return not is_less_than_days_ago(self.email_access_validated_at, 90)
+```
+
+Location: `app/models/user.py:132`
+
+## Failed login attempts
+
+Accounts are locked after 10 failed login attempts:
+
+```python
+MAX_FAILED_LOGIN_COUNT = 10
+
+@property
+def locked(self):
+    return self.failed_login_count >= self.MAX_FAILED_LOGIN_COUNT
+```
+
+Location: `app/models/user.py:48`, `app/models/user.py:322`
+
+Locked accounts can be unlocked by:
+- Platform administrators
+- Waiting for automatic unlock (implementation dependent)
+
+## Organization permissions
+
+Organization users have separate permissions from service permissions:
+
+**Permission**: `can_make_services_live`
+
+Organization users with this permission can:
+- Approve go-live requests for services in their organization  
+- Only if organization has `can_approve_own_go_live_requests`
+- Checked at `app/models/user.py:458`
+
+Location: `app/utils/user_permissions.py:24`

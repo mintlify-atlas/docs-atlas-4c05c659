@@ -1,0 +1,360 @@
+---
+title: Managing Services
+description: Complete guide to creating, configuring, and managing services in GOV.UK Notify Admin
+---
+
+## Overview
+
+Services are the core organizational unit in GOV.UK Notify. Each service has its own settings, templates, team members, and API keys. This guide covers everything you need to know about managing services.
+
+## Creating a New Service
+
+<Steps>
+  <Step title="Navigate to Add Service">
+    From your dashboard, click "Add service" or go to `/add-service`. You must be logged in with a government email address to create services.
+  </Step>
+
+  <Step title="Choose Service Type">
+    Select your organization type:
+    - **Central government** - For central government departments
+    - **Local government** - For local authorities and councils  
+    - **NHS** - For NHS organizations (has special settings)
+    - **NHS GP** - For GP practices (limited in trial mode)
+    - **Other** - For other public sector organizations
+  </Step>
+
+  <Step title="Name Your Service">
+    Enter a descriptive service name at `/add-service/name-your-service`. Service names must be unique across your organization.
+
+    <Note>
+      The service name appears in emails and as the default sender name, so choose something recognizable to recipients.
+    </Note>
+  </Step>
+
+  <Step title="Complete Setup">
+    After creation, your service is created in **trial mode** with default limits:
+    - Email: 1,000 messages per day
+    - SMS: 1,000 messages per day  
+    - Letter: 1,000 messages per day
+    - International SMS: 10 messages per day
+
+    If you're a first-time user (not NHS GP), you'll see an interactive tour with an example SMS template.
+  </Step>
+</Steps>
+
+## Service Settings
+
+Access service settings from `/services/{service_id}/service-settings`.
+
+### Basic Settings
+
+#### Service Name
+
+Change your service name from the settings page. The name is used as:
+- The default email sender name
+- The identifier in the Notify dashboard
+- Part of URLs and API responses
+
+<Warning>
+  Changing the service name affects how recipients see your messages. Update carefully.
+</Warning>
+
+#### Email Sender Name
+
+Customize how your service appears in email "From" fields:
+
+1. Go to **Service settings** > **Email sender name**
+2. Choose between:
+   - **Service name** (default) - Uses your service name
+   - **Custom sender name** - Specify a different name
+
+3. Preview how it appears: `[Your Name] <[service-name]@notifications.service.gov.uk>`
+
+### Channel Configuration
+
+#### Enable/Disable Channels
+
+Control which message types your service can send:
+
+**Email**
+- Must have at least one reply-to address
+- Must confirm your email sender name
+- Navigate to `/services/{service_id}/service-settings/set-email`
+
+**SMS**  
+- Enabled by default for most services
+- Set at `/services/{service_id}/service-settings/set-sms`
+- View current SMS rates and pricing
+
+**Letters**
+- Requires approval for live services
+- Set at `/services/{service_id}/service-settings/set-letter`
+- Shows current letter postage rates
+
+### Message Limits
+
+#### Daily Sending Limits
+
+View your current daily limits for each channel at `/services/{service_id}/service-settings/daily-message-limit/{type}`.
+
+The page shows:
+- Your daily limit
+- Messages sent today
+- Remaining quota
+- Real-time updates
+
+<Tip>
+  Daily limits reset at midnight UTC. Plan large sends accordingly.
+</Tip>
+
+#### International Settings
+
+**International SMS**
+1. Enable at `/services/{service_id}/service-settings/set-international-sms`
+2. Set daily limit (default: 10 messages)
+3. Supports 200+ countries
+
+**International Letters**  
+1. Enable at `/services/{service_id}/service-settings/set-international-letters`
+2. Allows addresses outside the UK
+3. Different postage rates apply
+
+### Data Retention
+
+Control how long Notify stores your message data:
+
+1. Navigate to `/services/{service_id}/service-settings/set-data-retention`
+2. Choose retention period: 3, 7, 14, 21, 28 days, or 3 months
+3. Applies to all message types
+
+<Warning>
+  High-volume services (1M+ messages) require platform admin assistance to change retention.
+</Warning>
+
+### Inbound SMS
+
+Receive text messages sent to your service:
+
+<Steps>
+  <Step title="Enable Inbound SMS">
+    Go to `/services/{service_id}/service-settings/receive-text-messages/start` and click "Continue".
+  </Step>
+
+  <Step title="Get Phone Number">
+    Notify assigns a dedicated UK phone number to your service automatically.
+  </Step>
+
+  <Step title="Configure Callbacks">
+    Set up API callbacks to receive inbound messages via your API integration.
+  </Step>
+</Steps>
+
+To disable:
+1. Go to `/services/{service_id}/service-settings/receive-text-messages/stop`
+2. Choose whether to:
+   - **Archive the number** - Keeps it unavailable for reassignment  
+   - **Release the number** - Makes it available for other services
+
+### Reply-to Addresses
+
+#### Email Reply-to
+
+Manage reply-to email addresses at `/services/{service_id}/service-settings/email-reply-to`.
+
+<Steps>
+  <Step title="Add Reply-to Address">
+    Click "Add reply-to email address" and enter the email address.
+  </Step>
+
+  <Step title="Verify Address">
+    Notify sends a verification email. Click the link within the timeout period (10 minutes).
+    
+    <Note>
+      Platform admins can add addresses without verification.
+    </Note>
+  </Step>
+
+  <Step title="Set Default">
+    Choose whether this is the default reply-to address for new templates.
+  </Step>
+</Steps>
+
+#### SMS Sender IDs
+
+Manage at `/services/{service_id}/service-settings/sms-sender`:
+
+- Add custom sender IDs (11 characters max, alphanumeric)
+- Use your inbound number as a sender
+- Set a default sender for templates
+- Configure multiple senders for different use cases
+
+<Warning>
+  Custom sender IDs must not contain URLs, look like NOREPLY, or use restricted terms.
+</Warning>
+
+#### Letter Contact Blocks
+
+Add contact information for letters at `/services/{service_id}/service-settings/letter-contacts`:
+
+1. Enter contact details (address, phone, etc.)
+2. Set as default if this is your first contact block
+3. Appears on letter templates
+
+## Going Live
+
+### Request to Go Live
+
+When ready to send to real users:
+
+<Steps>
+  <Step title="Estimate Usage">
+    At `/services/{service_id}/service-settings/request-to-go-live/estimate-usage`, provide estimates for:
+    - Emails per year
+    - SMS messages per year  
+    - Letters per year
+  </Step>
+
+  <Step title="Submit Request">
+    Complete the go-live request form with:
+    - Service purpose
+    - Who will receive messages
+    - Expected volume
+    - Main use case
+  </Step>
+
+  <Step title="Await Approval">
+    The Notify team reviews your request. You may be asked for:
+    - Organisation agreement signature
+    - Additional service details
+    - Volume justification
+  </Step>
+
+  <Step title="Service Activated">
+    Once approved, your service goes live with production limits based on your estimated usage.
+  </Step>
+</Steps>
+
+<Note>
+  Platform admins can switch services live immediately at `/services/{service_id}/service-settings/switch-live`.
+</Note>
+
+## Archive Service
+
+To delete a service:
+
+1. Navigate to `/services/{service_id}/service-settings/archive`
+2. Confirm deletion
+
+**Requirements:**
+- Service must be in trial mode OR you must be a platform admin
+- All active users are removed from the service
+- Service cache is purged
+
+<Warning>
+  Archiving cannot be undone. All templates, history, and settings are permanently deleted.
+</Warning>
+
+## Advanced Settings (Platform Admin)
+
+These settings require platform admin permissions:
+
+### Service Permissions
+
+Enable special capabilities at `/services/{service_id}/service-settings/permissions/{permission}`:
+
+- **Inbound SMS** - Receive text messages
+- **Email authentication** - Allow email-only sign-in for team members
+- **SMS to UK landlines** - Send to landline numbers
+- **Send files via email** - Attach files through the UI
+
+### Rate Limiting
+
+Set messages per minute at `/services/{service_id}/service-settings/set-rate-limit`:
+- Controls API throughput
+- Prevents system overload  
+- Default varies by service type
+
+### Free SMS Allowance
+
+Set annual free SMS quota at `/services/{service_id}/service-settings/set-free-sms-allowance`:
+- Applies to financial year
+- Overages are billable
+- Tracked in billing system
+
+### Organization Linking
+
+Link service to an organization at `/services/{service_id}/service-settings/link-service-to-organisation`:
+- Inherits organization branding
+- Shares branding pool
+- Affects billing and reporting
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Descriptive Names" icon="tag">
+    Choose service names that clearly identify the purpose and sender to recipients.
+  </Card>
+  
+  <Card title="Set Appropriate Limits" icon="gauge">
+    Configure daily limits based on actual usage patterns to avoid surprises.
+  </Card>
+  
+  <Card title="Verify Reply Addresses" icon="envelope-circle-check">
+    Always verify reply-to addresses to ensure users can reach you.
+  </Card>
+  
+  <Card title="Plan for Growth" icon="chart-line">
+    Request higher limits before you need them - approval takes time.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Cannot enable email channel">
+    Ensure you have:
+    1. At least one verified reply-to email address
+    2. Confirmed your email sender name
+    
+    Both are required before the email channel can be activated.
+  </Accordion>
+
+  <Accordion title="Service name already exists">
+    Service names must be unique across your organization. Try:
+    - Adding your team or department name
+    - Using a more specific description
+    - Checking if a similar service already exists
+  </Accordion>
+
+  <Accordion title="Cannot change data retention">
+    High-volume services (1M+ messages expected or sent) require platform admin assistance to modify retention periods for performance reasons.
+  </Accordion>
+
+  <Accordion title="Reply-to verification fails">
+    If verification emails aren't arriving:
+    - Check spam/junk folders
+    - Ensure the email address is correct
+    - Verification links expire after 10 minutes
+    - Platform admins can bypass verification
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Template Management" href="/guides/template-management">
+    Create and manage message templates
+  </Card>
+  
+  <Card title="Branding" href="/guides/branding">
+    Customize email and letter appearance
+  </Card>
+  
+  <Card title="Uploading Recipients" href="/guides/uploading-recipients">
+    Send to multiple recipients via CSV
+  </Card>
+  
+  <Card title="Authentication" href="/guides/authentication">
+    Configure team member sign-in methods
+  </Card>
+</CardGroup>

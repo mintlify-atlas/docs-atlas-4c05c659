@@ -1,0 +1,624 @@
+---
+title: Utility Functions
+description: Helper functions for common operations in GOV.UK Notify Admin
+---
+
+Utility functions provide reusable helpers for time operations, user management, CSV processing, branding, pagination, and template rendering.
+
+## Time Utilities
+
+**Location:** `app/utils/time.py`
+
+Functions for working with dates, times, and financial years.
+
+### get_current_financial_year
+
+Returns the current financial year (April to March).
+
+```python
+from app.utils.time import get_current_financial_year
+
+# If current date is June 2024, returns 2024
+# If current date is February 2024, returns 2023
+financial_year = get_current_financial_year()
+```
+
+**Returns:** `int` - The current financial year
+
+**Logic:** Returns current year if month > 3 (April onwards), otherwise returns previous year
+
+### percentage_through_current_financial_year
+
+Calculates how far through the current financial year as a percentage.
+
+```python
+from app.utils.time import percentage_through_current_financial_year
+
+# Returns value between 0.001 and 100
+percentage = percentage_through_current_financial_year()
+print(f"We are {percentage}% through the financial year")
+```
+
+**Returns:** `float` - Percentage (0.001-100) through the financial year
+
+**Use Case:** Budget tracking, rate limiting calculations based on annual allowances
+
+### is_less_than_days_ago
+
+Checks if a date is within the last N days.
+
+```python
+from app.utils.time import is_less_than_days_ago
+from datetime import datetime, UTC
+
+processing_started = datetime.now(UTC)
+if is_less_than_days_ago(processing_started, 7):
+    print("Within data retention period")
+```
+
+**Parameters:**
+- `date_from_db` (datetime): Date to check
+- `number_of_days` (int): Number of days threshold
+
+**Returns:** `bool` - True if date is less than N days ago
+
+### to_utc_string
+
+Converts an aware datetime to UTC string format.
+
+```python
+from app.utils.time import to_utc_string
+from datetime import datetime, UTC
+
+aware_dt = datetime.now(UTC)
+utc_string = to_utc_string(aware_dt)
+# Returns: "2024-12-15T14:30:45.123456Z"
+```
+
+**Parameters:**
+- `aware_datetime` (datetime): Timezone-aware datetime
+
+**Returns:** `str` - UTC datetime string in format `%Y-%m-%dT%H:%M:%S.%fZ`
+
+**Note:** Matches `app.utils.DATETIME_FORMAT` in the API codebase
+
+### str_no_tz
+
+Converts aware datetime to string without timezone info (for backwards compatibility).
+
+```python
+from app.utils.time import str_no_tz
+
+aware_dt = datetime.now(UTC)
+string_dt = str_no_tz(aware_dt)
+# Returns: "2024-12-15 14:30:45.123456"
+```
+
+**Parameters:**
+- `aware_datetime` (datetime): Timezone-aware datetime
+
+**Returns:** `str` - String representation without timezone
+
+### isoformat_no_tz
+
+Converts aware datetime to ISO format without timezone.
+
+```python
+from app.utils.time import isoformat_no_tz
+
+aware_dt = datetime.now(UTC)
+iso_string = isoformat_no_tz(aware_dt)
+# Returns: "2024-12-15T14:30:45.123456"
+```
+
+**Parameters:**
+- `aware_datetime` (datetime): Timezone-aware datetime
+
+**Returns:** `str` - ISO format string without timezone
+
+## User Utilities
+
+**Location:** `app/utils/user.py`
+
+Functions and decorators for user authentication and authorization.
+
+### Decorators
+
+#### user_is_logged_in
+
+Alias for Flask-Login's `login_required` decorator.
+
+```python
+from app.utils.user import user_is_logged_in
+
+@app.route('/dashboard')
+@user_is_logged_in
+def dashboard():
+    return render_template('dashboard.html')
+```
+
+#### user_has_permissions
+
+Requires user to have specific permissions.
+
+```python
+from app.utils.user import user_has_permissions
+
+@app.route('/send')
+@user_has_permissions('send_messages', 'manage_templates')
+def send_messages():
+    # User must have both permissions
+    return render_template('send.html')
+```
+
+**Parameters:**
+- `*permissions` (str): Required permission names
+- `**permission_kwargs`: Additional permission arguments
+
+**Behavior:** Returns 403 if user lacks permissions, redirects to login if not authenticated
+
+#### user_is_gov_user
+
+Requires user to have a government email address.
+
+```python
+from app.utils.user import user_is_gov_user
+
+@app.route('/admin')
+@user_is_gov_user
+def admin_panel():
+    # Only users with .gov.uk or approved org emails
+    return render_template('admin.html')
+```
+
+**Behavior:** Returns 403 if user is not a government user
+
+#### user_is_platform_admin
+
+Requires user to be a platform administrator.
+
+```python
+from app.utils.user import user_is_platform_admin
+
+@app.route('/platform-admin')
+@user_is_platform_admin
+def platform_admin():
+    # Only platform admins can access
+    return render_template('platform_admin.html')
+```
+
+**Behavior:** Returns 403 if user is not platform admin
+
+### Email Validation
+
+#### is_gov_user
+
+Checks if an email address belongs to a government user.
+
+```python
+from app.utils.user import is_gov_user
+
+if is_gov_user("user@example.gov.uk"):
+    print("Government user")
+else:
+    print("Non-government user")
+```
+
+**Parameters:**
+- `email_address` (str): Email address to check
+
+**Returns:** `bool` - True if email is from government domain or approved organisation
+
+**Logic:** Checks against:
+1. Government email domains from `email_domains.txt`
+2. Organisation domains from API
+
+## CSV Utilities
+
+**Location:** `app/utils/csv.py`
+
+Functions for CSV file processing and validation.
+
+### get_errors_for_csv
+
+Validates CSV recipients and returns user-friendly error messages.
+
+```python
+from app.utils.csv import get_errors_for_csv
+from notifications_utils.recipients import RecipientCSV
+
+recipients = RecipientCSV(file_data, template=template)
+errors = get_errors_for_csv(recipients, "email")
+
+if errors:
+    print(f"CSV has errors: {', '.join(errors)}")
+    # Output: "fix 3 email addresses, enter missing data in 2 rows"
+```
+
+**Parameters:**
+- `recipients` (RecipientCSV): Parsed CSV recipients
+- `template_type` (str): "email", "sms", or "letter"
+
+**Returns:** `list[str]` - List of human-readable error messages
+
+**Error Types Detected:**
+- Invalid recipients (bad email addresses, phone numbers)
+- Missing data in required columns
+- Messages too long
+- Empty messages
+- QR codes with too many characters
+
+### generate_notifications_csv
+
+Generates a CSV export of notifications with original upload data.
+
+```python
+from app.utils.csv import generate_notifications_csv
+
+# Generate CSV for job
+for chunk in generate_notifications_csv(
+    service_id=service_id,
+    job_id=job_id,
+    template_type="email",
+    page_size=50
+):
+    yield chunk
+```
+
+**Parameters (as kwargs):**
+- `service_id` (str): Service ID
+- `job_id` (str, optional): Job ID for job-specific export
+- `template_type` (str): Template type
+- `page_size` (int): Notifications per page
+- `page` (int): Starting page (default: 1)
+
+**Returns:** Generator yielding CSV data chunks
+
+**CSV Columns (with job_id):**
+- Row number
+- Original upload columns
+- Template, Type, Job, Status, Time
+
+**CSV Columns (without job_id):**
+- Recipient, Reference, Template, Type, Sent by, Sent by email, Job, Status, Time, API key name
+
+## Branding Utilities
+
+**Location:** `app/utils/branding.py`
+
+Functions for managing email and letter branding options.
+
+### get_email_choices
+
+Returns available email branding choices for a service.
+
+```python
+from app.utils.branding import get_email_choices
+
+choices = list(get_email_choices(service))
+# Returns: [("govuk", "GOV.UK"), ("nhs", "NHS"), ...]
+```
+
+**Parameters:**
+- `service` (Service): Service object
+
+**Returns:** Generator of `(id, name)` tuples
+
+**Logic:**
+1. Offers GOV.UK branding if service can use it and doesn't currently
+2. Offers "GOV.UK and {org}" if service has organisation
+3. Offers NHS branding if service is NHS and doesn't currently use it
+4. Offers brandings from service's branding pool
+5. Offers organisation branding if no branding pool
+
+### get_letter_choices
+
+Returns available letter branding choices for a service.
+
+```python
+from app.utils.branding import get_letter_choices
+
+choices = list(get_letter_choices(service))
+# Returns: [("nhs", "NHS"), ("org123", "Department Name"), ...]
+```
+
+**Parameters:**
+- `service` (Service): Service object
+
+**Returns:** Generator of `(id, name)` tuples
+
+**Logic:**
+1. Offers NHS branding if service is NHS and doesn't currently use it
+2. Offers brandings from letter branding pool
+3. Offers organisation branding if no branding pool
+
+### letter_filename_for_db_from_logo_key
+
+Extracts filename without extension from logo key for database storage.
+
+```python
+from app.utils.branding import letter_filename_for_db_from_logo_key
+
+logo_key = "letters/logos/department-logo.svg"
+filename = letter_filename_for_db_from_logo_key(logo_key)
+# Returns: "department-logo"
+```
+
+**Parameters:**
+- `logo_key` (str): Full logo file path
+
+**Returns:** `str` - Filename without extension
+
+**Note:** For letters, database stores filename without extension (unlike email branding which stores full path)
+
+## Pagination Utilities
+
+**Location:** `app/utils/pagination.py`
+
+Functions for handling paginated results.
+
+### get_page_from_request
+
+Extracts page number from request arguments.
+
+```python
+from app.utils.pagination import get_page_from_request
+
+page = get_page_from_request()
+if page is None:
+    # Invalid page parameter
+    abort(400)
+```
+
+**Returns:** `int` - Page number from request args, or 1 if not specified, or None if invalid
+
+### generate_previous_dict
+
+Generates previous page link data.
+
+```python
+from app.utils.pagination import generate_previous_dict
+
+previous = generate_previous_dict(
+    'main.view_jobs',
+    service_id,
+    page=2,
+    url_args={'status': 'completed'}
+)
+# Returns: {
+#   "url": "/services/123/jobs?page=1&status=completed",
+#   "title": "Previous page",
+#   "label": "page 1"
+# }
+```
+
+**Parameters:**
+- `view` (str): Flask view name
+- `service_id` (str): Service ID
+- `page` (int): Current page number
+- `url_args` (dict, optional): Additional URL parameters
+
+**Returns:** `dict` - Previous page link data
+
+### generate_next_dict
+
+Generates next page link data.
+
+```python
+from app.utils.pagination import generate_next_dict
+
+next_page = generate_next_dict(
+    'main.view_jobs',
+    service_id,
+    page=2,
+    url_args={'status': 'completed'}
+)
+# Returns: {
+#   "url": "/services/123/jobs?page=3&status=completed",
+#   "title": "Next page",
+#   "label": "page 3"
+# }
+```
+
+**Parameters:**
+- `view` (str): Flask view name
+- `service_id` (str): Service ID
+- `page` (int): Current page number
+- `url_args` (dict, optional): Additional URL parameters
+
+**Returns:** `dict` - Next page link data
+
+### generate_optional_previous_and_next_dicts
+
+Generates both previous and next page links, returning None for unavailable pages.
+
+```python
+from app.utils.pagination import generate_optional_previous_and_next_dicts
+
+previous, next_page = generate_optional_previous_and_next_dicts(
+    view='main.view_jobs',
+    service_id=service_id,
+    page=2,
+    num_pages=5,
+    url_args={'status': 'completed'}
+)
+
+if previous:
+    # Render previous link
+if next_page:
+    # Render next link
+```
+
+**Parameters:**
+- `view` (str): Flask view name
+- `service_id` (str): Service ID
+- `page` (int): Current page number
+- `num_pages` (int): Total number of pages
+- `url_args` (dict, optional): Additional URL parameters
+
+**Returns:** `tuple[dict | None, dict | None]` - (previous_page, next_page) or None if not available
+
+## Template Utilities
+
+**Location:** `app/utils/templates.py`
+
+Functions for template rendering and manipulation.
+
+### get_sample_template
+
+Creates a minimal template object for a given type.
+
+```python
+from app.utils.templates import get_sample_template
+
+email_template = get_sample_template("email")
+sms_template = get_sample_template("sms")
+letter_template = get_sample_template("letter")
+```
+
+**Parameters:**
+- `template_type` (str): "email", "sms", or "letter"
+
+**Returns:** Template object (EmailPreviewTemplate, SMSPreviewTemplate, or TemplatedLetterImageTemplate)
+
+**Use Case:** CSV validation, testing, placeholder templates
+
+### get_template
+
+Creates a fully configured template object with service branding and settings.
+
+```python
+from app.utils.templates import get_template
+
+template_obj = get_template(
+    template=template_data,
+    service=service,
+    show_recipient=True,
+    redact_missing_personalisation=False,
+    email_reply_to="replies@example.gov.uk",
+    sms_sender="Department"
+)
+
+rendered = str(template_obj)
+```
+
+**Parameters:**
+- `template` (dict): Template data from API
+- `service` (Service): Service object
+- `show_recipient` (bool): Whether to show recipient in preview
+- `letter_preview_url` (str, optional): URL for letter preview images
+- `page_count` (int, optional): Page count for precompiled letters
+- `redact_missing_personalisation` (bool): Whether to redact missing placeholders
+- `email_reply_to` (str, optional): Reply-to email address
+- `sms_sender` (str, optional): SMS sender name
+- `include_letter_edit_ui_overlay` (bool): Include letter editing UI
+
+**Returns:** Template object with rendering methods
+
+### TemplateChange
+
+Analyzes changes between template versions.
+
+```python
+from app.utils.templates import TemplateChange
+
+change = TemplateChange(
+    old_template,
+    new_template,
+    service_has_api_keys=True
+)
+
+if change.is_breaking_change:
+    # Warn user about breaking changes
+    print(f"Added placeholders: {change.placeholders_added}")
+    print(f"Removed placeholders: {change.placeholders_removed}")
+```
+
+**Properties:**
+- `has_different_placeholders` (bool): Whether placeholders changed
+- `placeholders_added` (OrderedSet): New placeholders
+- `placeholders_removed` (OrderedSet): Removed placeholders (excluding email files)
+- `email_files_removed` (OrderedSet): Removed email file attachments
+- `is_breaking_change` (bool): Whether change would break API integrations
+
+**Breaking Changes:**
+- Adding placeholders when service has API keys
+- Removing email file attachments
+
+## Usage Examples
+
+### Complete Workflow: User Registration with Time Tracking
+
+```python
+from app.utils.user import is_gov_user
+from app.utils.time import to_utc_string
+from datetime import datetime, UTC
+
+def register_new_user(email, name, mobile):
+    # Validate government email
+    if not is_gov_user(email):
+        raise ValueError("Must use government email")
+    
+    # Register with timestamp
+    user = user_api_client.register_user(
+        name=name,
+        email_address=email,
+        mobile_number=mobile,
+        password=generate_password(),
+        auth_type="sms_auth"
+    )
+    
+    # Log registration time
+    registration_time = to_utc_string(datetime.now(UTC))
+    logger.info(f"User {user['id']} registered at {registration_time}")
+    
+    return user
+```
+
+### Complete Workflow: CSV Upload with Validation
+
+```python
+from app.utils.csv import get_errors_for_csv
+from app.utils.pagination import generate_optional_previous_and_next_dicts
+from notifications_utils.recipients import RecipientCSV
+
+def process_csv_upload(file_data, template, service_id):
+    # Parse and validate CSV
+    recipients = RecipientCSV(file_data, template=template)
+    errors = get_errors_for_csv(recipients, template.template_type)
+    
+    if errors:
+        return {"errors": errors}
+    
+    # Create job
+    job = job_api_client.create_job(
+        job_id=generate_job_id(),
+        service_id=service_id
+    )
+    
+    return {"job_id": job['id']}
+
+def view_job_notifications(service_id, job_id, page):
+    # Get paginated notifications
+    notifications = notification_api_client.get_notifications_for_service(
+        service_id,
+        job_id=job_id,
+        page=page,
+        page_size=50
+    )
+    
+    # Generate pagination links
+    previous, next_page = generate_optional_previous_and_next_dicts(
+        view='main.view_job',
+        service_id=service_id,
+        page=page,
+        num_pages=notifications['total_pages']
+    )
+    
+    return render_template(
+        'notifications.html',
+        notifications=notifications['data'],
+        previous=previous,
+        next=next_page
+    )
+```

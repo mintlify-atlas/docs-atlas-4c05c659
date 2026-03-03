@@ -1,0 +1,479 @@
+---
+title: Templates
+description: Create, edit, and organize message templates for email, SMS, and letters
+---
+
+Templates define the structure and content of notifications sent through GOV.UK Notify. Each template can include personalization placeholders that are filled in when sending.
+
+## Template types
+
+Notify supports three template types:
+
+<Tabs>
+  <Tab title="Email">
+    Send HTML email messages with:
+    - Subject line personalization
+    - Formatted content (headings, lists, links)
+    - File attachments (via API)
+    - Custom reply-to addresses
+    - Email branding (logos, colors)
+    
+    **Character limit**: None (but keep messages concise)  
+    **Subject line limit**: 255 characters
+  </Tab>
+  
+  <Tab title="SMS">
+    Send text messages with:
+    - Plain text content
+    - Personalization placeholders
+    - Custom sender ID (11 characters or mobile number)
+    - International sending (with permission)
+    
+    **Character limit**: 918 characters  
+    **Fragment limit**: Calculated based on GSM-7 or Unicode
+    
+    Defined at: `notifications_utils.SMS_CHAR_COUNT_LIMIT`
+  </Tab>
+  
+  <Tab title="Letter">
+    Send postal letters with:
+    - Multi-page letters (auto-generated PDFs)
+    - Address formatting
+    - Custom branding
+    - Contact details in top right
+    - First or second class postage
+    - International sending
+    - Welsh language support
+    
+    **Page limit**: Based on content length  
+    **Address**: 7 lines maximum
+  </Tab>
+</Tabs>
+
+## Creating templates
+
+<Steps>
+  <Step title="Navigate to templates page">
+    Go to `/services/{service_id}/templates` to view all templates.
+  </Step>
+  
+  <Step title="Choose template type">
+    Click "Add template" and select:
+    - Email template
+    - Text message template  
+    - Letter template
+    
+    <Note>
+    Only template types enabled for your service will be available.
+    </Note>
+  </Step>
+  
+  <Step title="Name your template">
+    Choose a descriptive name that helps you identify the template.
+    
+    Template names:
+    - Are visible only to your team (not recipients)
+    - Can be changed at any time
+    - Are used in template statistics and reports
+  </Step>
+  
+  <Step title="Add content">
+    Write your message using:
+    - Plain text for SMS
+    - Markdown formatting for emails and letters
+    - Personalization placeholders in double parentheses: `((name))`
+    
+    For emails, also set:
+    - Subject line (can include placeholders)
+  </Step>
+  
+  <Step title="Preview template">
+    Review how your template will appear to recipients.
+    
+    - Letters show PDF preview
+    - Emails show HTML rendering with branding
+    - SMS shows character count and fragment cost
+  </Step>
+  
+  <Step title="Save template">
+    Save as draft or make live immediately.
+  </Step>
+</Steps>
+
+Implementation: `app/main/views/templates.py:103`
+
+## Personalization
+
+Add dynamic content using double parentheses:
+
+```
+Hello ((name)),
+
+Your reference number is ((reference)).
+Your appointment is on ((date)) at ((time)).
+```
+
+When sending, you provide values for each placeholder:
+
+```python
+personalisation={
+    "name": "Alice Smith",
+    "reference": "REF-12345",  
+    "date": "15 March 2024",
+    "time": "2:30pm"
+}
+```
+
+### Placeholder rules
+
+- **Case-insensitive**: `((Name))`, `((name))`, and `((NAME))` are equivalent
+- **Alphanumeric and spaces**: Can include letters, numbers, and spaces
+- **No special characters**: Avoid punctuation in placeholder names
+- **Reserved placeholders**: For letters, `address line 1` through `address line 7` are reserved
+
+### Optional content
+
+Show content only if a placeholder has a value:
+
+```
+((#has_notes))
+Additional notes: ((notes))
+((/has_notes))
+```
+
+If `notes` is empty, the entire section is hidden.
+
+## Email templates
+
+### Markdown formatting
+
+Emails and letters support Markdown:
+
+```markdown
+# Main heading
+## Subheading  
+### Smaller heading
+
+**Bold text**
+*Italic text*
+
+- Bullet point
+- Another point
+
+1. Numbered item
+2. Another item
+
+[Link text](https://www.gov.uk)
+
+^ Warning callout (on its own line)
+```
+
+### Email sender name
+
+Emails are sent from:
+- Service name (default)
+- Custom email sender name (if configured)
+
+Set at: `app/models/service.py:660`
+
+### Reply-to addresses
+
+Configure where replies go:
+1. Navigate to service settings
+2. Add email reply-to addresses
+3. Mark one as default
+4. Optionally select different reply-to per template
+
+Managed at: `app/models/service.py:316`
+
+## SMS templates
+
+### Character counting
+
+SMS messages are counted in fragments:
+- **GSM-7 encoding**: 160 characters per fragment
+- **Unicode**: 70 characters per fragment (for emoji, accents)
+
+Fragment cost calculation at: `app/formatters.py:character_count`
+
+### SMS senders
+
+Text messages can be sent from:
+- **11-character ID**: e.g., "GOVUK" or "YourService"  
+- **Mobile number**: For receiving replies
+- **Shared numbers**: Provided by Notify
+
+Restrictions:
+- Non-central government must not use "GOVUK"
+- Alphanumeric IDs cannot receive replies
+- Mobile numbers require inbound SMS permission
+
+Managed at: `app/models/service.py:346`
+
+### Inbound SMS
+
+If your service has `inbound_sms` permission:
+
+1. You're assigned a dedicated mobile number
+2. Recipients can reply to your messages
+3. View replies at `/services/{service_id}/inbox`  
+4. Download inbox as CSV
+5. Configure callback URL for real-time delivery
+
+Inbox implementation: `app/main/views/dashboard.py:432`
+
+## Letter templates
+
+### Creating letter content
+
+Letters require:
+
+**Subject line**: Appears as the letter heading
+
+**Address placeholders**: First 7 placeholders are used for postal address:
+```
+((address line 1))  # Recipient name
+((address line 2))  # Building/street  
+((address line 3))  # Town/city and postcode
+((address line 4))  # Optional
+((address line 5))  # Optional
+((address line 6))  # Optional
+((address line 7))  # Optional
+```
+
+**Content**: Markdown-formatted letter body
+
+### Letter branding
+
+Letters can include:
+- Organization logo
+- Custom header colors
+- Department branding
+
+Preview letter branding at: `/templates/letter-preview-image`  
+Configuration: `app/models/service.py:494`
+
+### Contact details
+
+Appear in top right of letter:
+- Postal address  
+- Phone number
+- Email address  
+- Website URL
+
+Configure at service settings. Multiple contact blocks can be created, with one set as default.
+
+Managed at: `app/models/service.py:390`
+
+### Postage options
+
+<Tabs>
+  <Tab title="First class">
+    Faster delivery, higher cost.  
+    Typical delivery: 1-2 business days
+  </Tab>
+  
+  <Tab title="Second class">
+    Standard delivery, lower cost.  
+    Typical delivery: 2-3 business days
+  </Tab>
+  
+  <Tab title="International">
+    For addresses outside the UK.  
+    Requires `international_letters` permission.  
+    Delivery time varies by destination.
+  </Tab>
+</Tabs>
+
+### Welsh language letters
+
+Services can create bilingual Welsh/English letters:
+
+1. Create English version first
+2. Create Welsh version at `/services/{service_id}/templates/{template_id}/welsh`
+3. Both versions linked together  
+4. When sending, specify language preference
+
+Form: `WelshLetterTemplateForm` at `app/main/forms.py`
+
+### Uploading letter PDFs
+
+For pre-designed letters:
+
+1. Upload PDF at template creation
+2. PDF must meet Notify requirements:
+   - A4 size  
+   - Minimum margins
+   - No password protection
+3. Address still provided as data when sending
+
+Upload handling: `app/s3_client/s3_letter_upload_client.py:upload_letter_to_s3`
+
+## Template folders
+
+Organize templates into folders:
+
+<Steps>
+  <Step title="Create folder">
+    At `/services/{service_id}/templates`, use "Add folder" action.
+  </Step>
+  
+  <Step title="Name folder">
+    Choose a descriptive name (e.g., "Appointment reminders", "Invoices").
+  </Step>
+  
+  <Step title="Move templates">
+    Drag templates into folders or use bulk move action.
+  </Step>
+  
+  <Step title="Set folder permissions (optional)">
+    If enabled, restrict which team members can access the folder.
+  </Step>
+</Steps>
+
+Folders can be nested for complex organization:
+```
+📁 Customer communications
+  📁 Onboarding
+    📄 Welcome email
+    📄 Account setup SMS
+  📁 Billing  
+    📄 Invoice email
+    📄 Payment reminder
+```
+
+Implementation: `app/models/service.py:539`
+
+## Template versioning
+
+Every template edit creates a new version:
+
+- Previous versions are saved permanently
+- View version history at `/services/{service_id}/templates/{template_id}/history`
+- Revert to previous version if needed
+- API sends always use latest version (unless version specified)
+
+Notifications sent with a template keep a reference to the specific version used.
+
+### Viewing version history
+
+```python
+def get_template(self, template_id, version=None, **kwargs):
+    template = service_api_client.get_service_template(
+        self.id, template_id, version
+    )["data"]
+    return get_template_as_rich_object(template, service=self, **kwargs)
+```
+
+Location: `app/models/service.py:240`
+
+## Copying templates
+
+Templates can be copied:
+
+### Within same service
+
+1. View template
+2. Click "Copy template"
+3. Edit name and content  
+4. Save as new template
+
+### Between services
+
+If you're a member of multiple services:
+
+1. Use "Copy from another service" option
+2. Select source service
+3. Choose template to copy
+4. Adapt content for new service
+
+Form: `CopyTemplateForm` at `app/main/forms.py`
+
+## Searching templates
+
+For services with 7+ templates:
+
+- Search box appears on templates page
+- Search by template name
+- Search by template content
+- Filter by template type (email/SMS/letter)
+
+Form: `SearchTemplatesForm` at `app/main/forms.py:52`
+
+## Template statistics
+
+View usage statistics:
+
+### Last 7 days
+
+Dashboard shows most-used templates with:
+- Number of sends
+- Template type icons
+- Quick link to template
+
+Aggregation: `app/main/views/dashboard.py:511`
+
+### Monthly usage
+
+At `/services/{service_id}/template-usage`:
+
+- Usage by month in current financial year  
+- Can view previous years
+- Breakdown by template
+- Total sends per template
+
+Implementation: `app/main/views/dashboard.py:234`
+
+## Archiving templates
+
+Templates can be archived when no longer needed:
+
+- Archived templates don't appear in main templates list
+- Cannot be used to send new notifications
+- Still appear in statistics for historical sends  
+- Can be restored if needed
+
+Archived status at: `template._template["archived"]`
+
+## Template limits
+
+Per service:
+- No hard limit on number of templates
+- No limit on template size (but keep content reasonable)
+- Folder depth: Unlimited nesting
+
+Per template:
+- SMS: 918 characters (`SMS_CHAR_COUNT_LIMIT`)
+- Email subject: 255 characters
+- Letter pages: Auto-calculated based on content
+
+## Best practices
+
+<Note>
+**Naming conventions**
+- Use clear, descriptive names
+- Include template type in name if helpful
+- Consider prefixing with category (e.g., "Billing - Invoice")
+</Note>
+
+<Warning>
+**Personalization**
+- Always provide all placeholders when sending
+- Use meaningful placeholder names
+- Test with realistic data before sending
+</Warning>
+
+<Note>
+**SMS efficiency**  
+- Avoid emoji and accents if possible (uses Unicode encoding)
+- Keep messages under 160 characters for single fragment
+- Use short URLs for links
+</Note>
+
+<Note>
+**Email accessibility**
+- Use headings for structure
+- Keep line length reasonable  
+- Use descriptive link text (not "click here")
+- Test with screen readers
+</Note>

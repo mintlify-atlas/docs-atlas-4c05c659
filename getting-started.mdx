@@ -1,0 +1,371 @@
+---
+title: Getting started
+description: Set up your first GOV.UK Notify service and send your first notification
+---
+
+## Overview
+
+This guide walks you through creating your first service, setting up a template, and sending a notification using GOV.UK Notify Admin. You'll learn the essential workflows that every service owner needs to know.
+
+<Note>
+  All new services start in trial mode, which restricts sending to team members and guest list recipients only. You can request to go live once you've tested your service.
+</Note>
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- A GOV.UK Notify Admin account with verified email address
+- Access to a mobile phone for two-factor authentication (SMS or WebAuthn)
+- Appropriate permissions for your intended actions
+
+## Create your first service
+
+<Steps>
+  <Step title="Register and sign in">
+    Navigate to the GOV.UK Notify Admin platform and sign in with your credentials. You'll need to complete two-factor authentication using SMS, email, or WebAuthn.
+
+    The platform supports three authentication methods:
+    - **Email authentication** - Click a link sent to your email
+    - **SMS authentication** - Enter a code sent via text message
+    - **WebAuthn** - Use a hardware security key or biometric authentication
+  </Step>
+
+  <Step title="Create a new service">
+    From your dashboard, click "Add a new service" and provide:
+
+    - **Service name** - Choose a clear, descriptive name for your service
+    - **Organization type** - Select from central government, local government, NHS, emergency service, school/college, or other
+
+    Your service will be created in trial mode with default limits:
+    - 50 messages per day across all channels
+    - 100 international SMS limit
+    - Email, SMS, and letter permissions enabled
+  </Step>
+
+  <Step title="Configure service settings">
+    Navigate to Settings to configure your service:
+
+    **Service details**
+    - Service name and contact information
+    - Email sender name (customizable local part)
+    - Contact link (URL, email, or phone number for recipients)
+
+    **Message limits**
+    - Email message limit: 250,000 (live services)
+    - SMS message limit: 250,000 (live services)
+    - Letter message limit: 20,000 (live services)
+
+    **Permissions**
+    - Email, SMS, and letter channels
+    - International SMS capability
+    - International letter support
+    - Inbound SMS for two-way messaging
+    - SMS to UK landlines
+  </Step>
+
+  <Step title="Add team members">
+    Invite team members to collaborate on your service:
+
+    1. Go to Settings > Team members
+    2. Click "Invite user"
+    3. Enter their email address and select permissions:
+       - **Manage settings, team and usage** - Full service control
+       - **Manage templates** - Create and edit templates
+       - **Send messages** - Send notifications
+       - **View activity** - Read-only dashboard access
+       - **Manage API integration** - Create and manage API keys
+    4. Choose authentication method (SMS or email)
+    5. Optionally assign folder permissions for template organization
+
+    <Tip>
+      Team members receive an invitation email valid for 48 hours. They must have a GOV.UK Notify account to accept.
+    </Tip>
+  </Step>
+</Steps>
+
+## Create your first template
+
+Templates are reusable message formats with placeholders for personalized content.
+
+<Steps>
+  <Step title="Navigate to templates">
+    From your service dashboard, click "Templates" in the navigation menu.
+  </Step>
+
+  <Step title="Choose template type">
+    Click "New template" and select:
+    - **Email** - For electronic mail with optional file attachments
+    - **Text message** - For SMS (limited to 918 characters)
+    - **Letter** - For physical mail via Royal Mail
+  </Step>
+
+  <Step title="Design your template">
+    **For email templates:**
+    ```html
+    Subject: Your appointment confirmation
+
+    Hi ((name)),
+
+    Your appointment is confirmed for ((date)) at ((time)).
+
+    Location: ((location))
+
+    If you need to cancel, please call us on 0300 123 4567.
+    ```
+
+    **For SMS templates:**
+    ```
+    GOV.UK Notify: Your appointment is on ((date)) at ((time)). Location: ((location)). To cancel, call 0300 123 4567.
+    ```
+
+    **For letter templates:**
+    Letters require postal address fields and support multiple pages. The system automatically calculates postage costs based on page count and postage class.
+
+    <Tip>
+      Use double parentheses `((variable))` for placeholders. Common placeholders include name, email address, phone number, and custom fields.
+    </Tip>
+  </Step>
+
+  <Step title="Preview and save">
+    Use the live preview to test your template with sample data:
+    - View character count (SMS has a 918-character limit)
+    - See page count estimate for letters
+    - Check personalization rendering
+
+    Once satisfied, save your template. You can edit it later, and the platform maintains version history.
+  </Step>
+</Steps>
+
+## Send your first notification
+
+You can send notifications one at a time or in batches using CSV upload.
+
+### Send a single message
+
+<Steps>
+  <Step title="Select template">
+    From your dashboard or templates page, click on the template you want to use, then click "Send".
+  </Step>
+
+  <Step title="Enter recipient details">
+    Provide the recipient information:
+    - **Email**: Enter the email address
+    - **SMS**: Enter the mobile number (UK format: 07700 900000)
+    - **Letter**: Complete all address lines (line 1-7)
+  </Step>
+
+  <Step title="Fill in placeholders">
+    Enter values for any placeholder variables in your template. The preview updates in real-time.
+  </Step>
+
+  <Step title="Send immediately or schedule">
+    Choose to send now or schedule for a future date and time. Click "Send" to dispatch your notification.
+  </Step>
+</Steps>
+
+### Send batch messages via CSV
+
+For sending to multiple recipients, use CSV upload:
+
+<Steps>
+  <Step title="Prepare your CSV file">
+    Create a CSV file with required columns:
+
+    **Email CSV example:**
+    ```csv
+    email address,name,date,time,location
+    user@example.com,John Smith,15 March,2:30pm,Room 101
+    ```
+
+    **SMS CSV example:**
+    ```csv
+    phone number,name,reference
+    07700900321,Jane Doe,REF123
+    ```
+
+    **Letter CSV example:**
+    ```csv
+    address line 1,address line 2,address line 3,postcode,name
+    A. Name,123 Example Street,London,SW1A 1AA,Alice Brown
+    ```
+
+    <Warning>
+      In trial mode, you can only send to team members and guest list recipients. Add test recipients to your guest list in Settings > API integration > Guest list.
+    </Warning>
+  </Step>
+
+  <Step title="Upload and validate">
+    1. Select your template and click "Send"
+    2. Upload your CSV file
+    3. The platform validates:
+       - Column headers match template requirements
+       - Email addresses are valid format
+       - Phone numbers are valid UK numbers
+       - Required address fields are present
+       - File size is within limits
+  </Step>
+
+  <Step title="Review and confirm">
+    Review the upload summary:
+    - Number of messages to send
+    - Estimated cost (for SMS and letters)
+    - Preview of first few messages
+
+    For letters, you'll see:
+    - Page count per letter
+    - Postage class (first class, second class, economy, international)
+    - Total postage cost
+  </Step>
+
+  <Step title="Send or schedule">
+    Choose to:
+    - Send immediately
+    - Schedule for a specific date and time
+
+    Click "Send messages" to create the job. You can track progress in the "Sent messages" section.
+  </Step>
+</Steps>
+
+## Monitor your notifications
+
+Track the status of your sent notifications:
+
+<Tabs>
+  <Tab title="Dashboard view">
+    Your service dashboard shows:
+    - **7-day totals** - Messages sent, delivered, and failed in the last week
+    - **Template statistics** - Most-used templates with send counts
+    - **Failure rate warnings** - Alerts when failure rate exceeds 3%
+    - **Upcoming scheduled sends** - Jobs waiting to be sent
+    - **Inbox** - Inbound SMS messages (if enabled)
+  </Tab>
+
+  <Tab title="Notification history">
+    View detailed notification history:
+    1. Navigate to "Sent messages"
+    2. Filter by:
+       - Message type (email, SMS, letter, or all)
+       - Status (sending, delivered, failed, or all)
+       - Search by recipient, reference, or file name
+    3. Click any notification to see full details:
+       - Delivery status and timestamps
+       - Template used and version
+       - Content sent (with redacted recipient info)
+       - Delivery provider information
+
+    <Info>
+      Notification history is retained based on your service's data retention settings (default 7 days, configurable up to longer periods).
+    </Info>
+  </Tab>
+
+  <Tab title="Usage reports">
+    Access detailed usage analytics:
+    - **Template usage** - Monthly breakdown by template
+    - **Monthly stats** - Financial year reporting
+    - **Annual usage** - Yearly totals with cost breakdown
+    - **CSV exports** - Download notification data
+
+    Navigate to "Usage" to see:
+    - Free SMS allowance remaining
+    - SMS costs beyond free allowance
+    - Letter costs by postage class
+    - Email volume (unlimited and free)
+  </Tab>
+</Tabs>
+
+## Set up API access
+
+For programmatic sending, generate API keys:
+
+<Steps>
+  <Step title="Navigate to API integration">
+    Go to Settings > API integration
+  </Step>
+
+  <Step title="Create API key">
+    Click "Create an API key" and configure:
+    - **Key name** - Descriptive name for identification
+    - **Key type**:
+      - **Test** - Pretends to send messages (no actual delivery)
+      - **Team and guest list** - Sends only to authorized recipients
+      - **Live** - Sends to anyone (requires live service)
+
+    <Warning>
+      Live keys are only available for services that have completed the go-live process. Test keys should be used during development.
+    </Warning>
+  </Step>
+
+  <Step title="Store your key securely">
+    The API key is displayed only once. Store it securely:
+    ```bash
+    export NOTIFY_API_KEY="your-key-here"
+    ```
+
+    Use the key with the GOV.UK Notify Python client or make direct API calls.
+  </Step>
+</Steps>
+
+## Request to go live
+
+When you're ready to send to the public:
+
+<Steps>
+  <Step title="Complete prerequisites">
+    Ensure your service has:
+    - Tested sending in trial mode
+    - Created templates
+    - Invited team members
+    - Configured service settings
+  </Step>
+
+  <Step title="Submit go-live request">
+    Navigate to Settings and click "Request to go live". Provide:
+    - Expected volume estimates (emails, SMS, letters per year)
+    - Use case description
+    - Target launch date
+
+    Your request will be reviewed by the GOV.UK Notify team or your organization's approval team (if enabled).
+  </Step>
+
+  <Step title="Approval and activation">
+    Once approved:
+    - Trial mode restrictions are removed
+    - Message limits increase to production levels
+    - Live API keys become available
+    - Billing tracking begins (if applicable)
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Template best practices"
+    icon="file-lines"
+    href="/essentials/templates"
+  >
+    Learn advanced template techniques and optimization
+  </Card>
+  <Card
+    title="API documentation"
+    icon="code"
+    href="/api-reference/introduction"
+  >
+    Integrate GOV.UK Notify with your applications
+  </Card>
+  <Card
+    title="User management"
+    icon="users"
+    href="/essentials/user-management"
+  >
+    Manage team permissions and access control
+  </Card>
+  <Card
+    title="Architecture overview"
+    icon="sitemap"
+    href="/architecture"
+  >
+    Understand the system architecture
+  </Card>
+</CardGroup>

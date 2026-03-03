@@ -1,0 +1,307 @@
+---
+title: Templates and Jinja
+description: Template architecture, Jinja patterns, and GOV.UK Frontend integration
+---
+
+## Overview
+
+GOV.UK Notify Admin uses **Jinja2** templates with [GOV.UK Frontend](https://frontend.design-system.service.gov.uk/) components via the `govuk-frontend-jinja` package.
+
+### Template directory structure
+
+```
+app/templates/
+├── admin_template.html              # Base layout for admin pages
+├── content_template.html            # Content-focused layout
+├── withnav_template.html            # Layout with navigation
+├── withoutnav_template.html         # Layout without navigation
+├── components/                      # Reusable UI components (28 files)
+│   ├── ajax-block.html
+│   ├── banner.html
+│   ├── copy-to-clipboard.html
+│   ├── file-upload.html
+│   ├── live-search.html
+│   └── ...
+├── govuk_frontend_jinja_overrides/  # Custom component overrides
+│   └── templates/components/
+│       ├── checkboxes/macro.html
+│       ├── nested-radios/macro.html
+│       └── radios-with-images/macro.html
+├── partials/                        # Partial templates
+├── views/                           # Page templates (28 directories)
+│   ├── dashboard/
+│   ├── api/
+│   ├── agreement/
+│   └── ...
+└── error/                          # Error pages
+```
+
+## Base templates
+
+### admin_template.html
+
+The primary layout template extending GOV.UK Frontend:
+
+```jinja
+{% extends "govuk_frontend_jinja/template.html"%}
+{% from "govuk_frontend_jinja/components/service-navigation/macro.html" import govukServiceNavigation %}
+
+{% set cspNonce = request.csp_nonce %}
+{% set govukRebrand = True %}
+
+{% block pageTitle %}
+  {% block errorPrefix %}{% if form and form.errors %}Error: {% endif %}{% endblock %}
+  {% block per_page_title %}{% endblock %} – GOV.UK Notify
+{% endblock %}
+
+{% block head %}
+  {%- for font in font_paths %}
+  <link rel="preload" href="{{ asset_url(font, with_querystring_hash=False) }}" as="font" type="font/woff2" crossorigin>
+  {%- endfor %}
+  <link rel="stylesheet" media="screen" href="{{ asset_url('stylesheets/main.css') }}" />
+  <link rel="stylesheet" media="print" href="{{ asset_url('stylesheets/print.css') }}" />
+{% endblock %}
+```
+
+Key features:
+- Font preloading for performance
+- CSP nonce support for inline scripts
+- Rebrand flag for new GOV.UK styling
+- Automatic error prefix in page titles
+
+### Loading JavaScript
+
+The template loads both ESM and legacy JavaScript:
+
+```jinja
+{% block bodyEnd %}
+  <script type="module" src="{{ asset_url('javascripts/all-esm.mjs') }}"></script>
+  <script type="text/javascript" src="{{ asset_url('javascripts/all.js') }}"></script>
+{% endblock %}
+```
+
+Browsers that support ES modules load `all-esm.mjs`; legacy browsers fall back to `all.js`.
+
+## Custom components
+
+### Component macros
+
+Components are implemented as Jinja macros in `app/templates/components/`:
+
+#### live-search.html
+
+```jinja
+{% macro live_search(
+    target_selector=None,
+    show=False,
+    form=None,
+    label=None,
+    autofocus=False
+) %}
+    {%- set search_label = label or form.search.label.text %}
+    {%- set param_extensions = {
+      "label": {"text": search_label},
+      "autocomplete": "off",
+    } %}
+
+    {% if autofocus %}
+      {% set x=param_extensions.__setitem__("attributes", {"data-notify-module": "autofocus"}) %}
+    {% endif %}
+
+    {% if show %}
+        <div class="live-search js-header" data-notify-module="live-search" data-targets="{{ target_selector }}">
+          {{ form.search(param_extensions=param_extensions) }}
+          <div aria-live="polite" class="live-search__status govuk-visually-hidden"></div>
+        </div>
+    {% endif %}
+{% endmacro %}
+```
+
+Key patterns:
+- `data-notify-module` attribute triggers JavaScript initialization
+- `data-targets` provides configuration to JavaScript
+- ARIA live region for screen reader announcements
+
+#### page-header.html
+
+Simple macro for consistent heading styles:
+
+```jinja
+{% macro page_header(
+  h1,
+  size='large',
+  classes=''
+) %}
+  <h1 class="heading-{{ size }} {{ classes if classes }}" id="page-header">{{ h1 }}</h1>
+{% endmacro %}
+```
+
+### Using components
+
+```jinja
+{% from "components/page-header.html" import page_header %}
+{% from "components/live-search.html" import live_search %}
+
+{{ page_header('Manage templates') }}
+
+{{ live_search(
+  target_selector='.template-list-item',
+  show=True,
+  form=form,
+  autofocus=True
+) }}
+```
+
+## GOV.UK Frontend integration
+
+### Using GOV.UK Frontend components
+
+Import and use components from `govuk_frontend_jinja`:
+
+```jinja
+{% from "govuk_frontend_jinja/components/button/macro.html" import govukButton %}
+{% from "govuk_frontend_jinja/components/radios/macro.html" import govukRadios %}
+{% from "govuk_frontend_jinja/components/error-summary/macro.html" import govukErrorSummary %}
+
+{{ govukButton({
+  "text": "Save and continue",
+  "preventDoubleClick": true
+}) }}
+
+{{ govukRadios({
+  "name": "branding_style",
+  "fieldset": {
+    "legend": {
+      "text": "Choose a style",
+      "classes": "govuk-fieldset__legend--m"
+    }
+  },
+  "items": [
+    {"value": "govuk", "text": "GOV.UK"},
+    {"value": "custom", "text": "Custom"}
+  ]
+}) }}
+```
+
+### Component overrides
+
+Custom versions of GOV.UK Frontend components live in `govuk_frontend_jinja_overrides/`:
+
+- **checkboxes/macro.html** - Enhanced checkbox behavior
+- **nested-radios/macro.html** - Radio groups with conditional content
+- **radios-with-images/macro.html** - Radio options with image previews
+
+These override the default GOV.UK Frontend implementations when imported.
+
+## JavaScript module initialization
+
+Templates use `data-notify-module` to trigger JavaScript:
+
+```jinja
+<div data-notify-module="copy-to-clipboard" data-clipboard-text="{{ api_key }}">
+  <button type="button" class="govuk-button">Copy to clipboard</button>
+</div>
+
+<div data-notify-module="file-upload">
+  {{ govukFileUpload({"name": "file", "label": {"text": "Upload a file"}}) }}
+</div>
+
+<div data-notify-module="colour-preview">
+  {{ govukInput({"name": "colour", "label": {"text": "Brand colour"}}) }}
+</div>
+```
+
+The ESM JavaScript scans for these attributes and initializes the corresponding modules:
+
+```javascript
+const $fileUpload = document.querySelector('[data-notify-module="file-upload"]');
+if ($fileUpload) {
+  new FileUpload($fileUpload);
+}
+```
+
+See [JavaScript architecture](/development/javascript) for details.
+
+## Progressive enhancement
+
+Templates hide JavaScript-enhanced features in non-supporting browsers:
+
+```jinja
+{# Only shown in browsers with JavaScript module support #}
+<div class="live-search">
+  {# Will be display:none unless .govuk-frontend-supported is on <body> #}
+</div>
+```
+
+Corresponding SCSS:
+
+```scss
+.live-search {
+  display: none;
+
+  .#{$govuk-frontend-supported-css-class} & {
+    display: block;
+  }
+}
+```
+
+GOV.UK Frontend adds the `.govuk-frontend-supported` class when JavaScript modules are available.
+
+## Template inheritance patterns
+
+### Extending base templates
+
+```jinja
+{% extends "withnav_template.html" %}
+
+{% block per_page_title %}
+  Dashboard
+{% endblock %}
+
+{% block maincolumn_content %}
+  <h1>{{ current_service.name }}</h1>
+  {# Page content #}
+{% endblock %}
+```
+
+### Common block names
+
+- `per_page_title` - Page-specific title (appears before " – GOV.UK Notify")
+- `maincolumn_content` - Main page content area
+- `extra_javascripts` - Additional JavaScript includes
+- `extra_stylesheets` - Additional CSS includes
+- `meta` - Custom meta tags
+
+## Accessibility features
+
+### Error handling
+
+Automatic error prefix in page titles:
+
+```jinja
+{% block pageTitle %}
+  {% block errorPrefix %}{% if form and form.errors %}Error: {% endif %}{% endblock %}
+  {% block per_page_title %}{% endblock %} – GOV.UK Notify
+{% endblock %}
+```
+
+Automatic focus on first error:
+
+```javascript
+// In main.js
+$(() => $('.error-message, .govuk-error-message').eq(0).parent('label').next('input').trigger('focus'));
+```
+
+### ARIA attributes
+
+Components include proper ARIA labels:
+
+```jinja
+<div aria-live="polite" class="live-search__status govuk-visually-hidden"></div>
+```
+
+## Related documentation
+
+- [JavaScript architecture](/development/javascript) - How templates connect to JavaScript
+- [SCSS and styling](/development/styling) - Component styles
+- [GOV.UK Frontend documentation](https://frontend.design-system.service.gov.uk/)

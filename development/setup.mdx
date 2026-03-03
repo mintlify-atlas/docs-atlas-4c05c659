@@ -1,0 +1,116 @@
+---
+title: Local Development Setup
+description: Set up your local environment to develop GOV.UK Notify Admin
+---
+
+This guide walks you through setting up your local development environment for GOV.UK Notify Admin, a Flask-based Python admin frontend.
+
+## Prerequisites
+
+### Python 3.13
+
+GOV.UK Notify Admin runs Python 3.13 in production. Ensure you have Python 3.13 installed on your system.
+
+### Node.js 24
+
+The project uses Node.js version 24 (specified in `.nvmrc`).
+
+#### Install Node.js with Homebrew
+
+```bash
+brew install node
+```
+
+#### Using nvm (Recommended)
+
+`nvm` is a tool for managing different versions of Node.js. Follow the [installation guidance on nvm's GitHub repository](https://github.com/nvm-sh/nvm#installing-and-updating).
+
+Once installed, switch to the project's Node.js version:
+
+```bash
+nvm use
+```
+
+If you don't have Node.js 24 installed, nvm will tell you how to install it.
+
+## Initial Setup
+
+<Steps>
+  <Step title="Install uv for Python dependency management">
+    The project uses [uv](https://github.com/astral-sh/uv) for Python dependency management.
+
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+
+    See the [uv installation docs](https://github.com/astral-sh/uv?tab=readme-ov-file#installation) for alternative installation methods.
+  </Step>
+
+  <Step title="Install pre-commit hooks">
+    The project uses [pre-commit](https://pre-commit.com/) to ensure committed code meets formatting standards and makes basic fixes automatically.
+
+    Install pre-commit system-wide:
+
+    ```bash
+    brew install pre-commit
+    ```
+
+    Then install the hooks in this repository:
+
+    ```bash
+    pre-commit install --install-hooks
+    ```
+
+    The pre-commit configuration (`.pre-commit-config.yaml`) includes:
+    - Trailing whitespace removal
+    - End-of-file fixer
+    - YAML validation
+    - Debug statement detection
+    - Ruff linting and formatting
+  </Step>
+
+  <Step title="Create environment.sh">
+    Create an `environment.sh` file in the root directory with required environment variables:
+
+    ```bash
+    echo "
+export NOTIFY_ENVIRONMENT='development'
+export FLASK_APP=application.py
+export FLASK_DEBUG=1
+export WERKZEUG_DEBUG_PIN=off
+" > environment.sh
+    ```
+
+    This file sets up:
+    - `NOTIFY_ENVIRONMENT`: Identifies the environment as development
+    - `FLASK_APP`: Points to the main application file
+    - `FLASK_DEBUG`: Enables Flask debug mode for auto-reload
+    - `WERKZEUG_DEBUG_PIN`: Disables the Werkzeug debugger PIN
+  </Step>
+
+  <Step title="Bootstrap the application">
+    Run the bootstrap command to install all dependencies and build the frontend:
+
+    ```bash
+    make bootstrap
+    ```
+
+    This command:
+    1. Generates a version file (`app/version.py`)
+    2. Installs Python dependencies from `requirements_for_test.txt` using uv
+    3. Installs Node.js dependencies using `npm ci --no-audit`
+    4. Builds the frontend assets with `npm run build`
+  </Step>
+</Steps>
+
+## AWS Credentials (Optional)
+
+To run certain parts of the application (such as uploading letters), you'll need appropriate AWS credentials.
+
+See the [Notify manuals wiki](https://github.com/alphagov/notifications-manuals/wiki/aws-accounts#how-to-set-up-local-development) for details on setting up AWS credentials for local development.
+
+## Next Steps
+
+With your environment set up, you're ready to:
+- [Run the application locally](/development/running-locally)
+- [Run tests](/development/testing)
